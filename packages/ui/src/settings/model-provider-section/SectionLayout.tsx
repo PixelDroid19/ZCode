@@ -53,15 +53,19 @@ export function ModelProviderSectionLayout({
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-ui-base leading-6 text-foreground-subtle">{description}</p>
-        <SettingsResourceHeaderActions
-          onRefresh={onRefresh}
-          onNew={onAddProvider}
-          refreshing={refreshButtonLoading}
-          refreshLabel={refreshButtonLoading ? loadingLabel : refreshLabel}
-          newLabel={addProviderLabel}
-          newTestId={TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON}
-        />
+        <p className="min-w-0 text-ui-base leading-6 text-foreground-subtle">{description}</p>
+        {/* shrink-0: 描述文案较长的语言（如 es-ES）会挤压 actions 容器宽度，
+            flex-wrap 会把「新建」按钮折到刷新图标下方。固定不收缩让按钮保持同行。 */}
+        <div className="shrink-0">
+          <SettingsResourceHeaderActions
+            onRefresh={onRefresh}
+            onNew={onAddProvider}
+            refreshing={refreshButtonLoading}
+            refreshLabel={refreshButtonLoading ? loadingLabel : refreshLabel}
+            newLabel={addProviderLabel}
+            newTestId={TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON}
+          />
+        </div>
       </div>
 
       <div className="overflow-clip rounded-xl border border-border bg-card">
