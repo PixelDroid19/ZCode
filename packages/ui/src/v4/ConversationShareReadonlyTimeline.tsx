@@ -1107,17 +1107,29 @@ export function ConversationShareReadonlyTimeline({
           markerModelChange: "模型已切换",
           unsupportedRows: "部分内容需要更新 ZCode 查看",
         }
-      : {
-          history: "Reasoning",
-          computerUse: "Computer use",
-          explore: "Explore",
-          execute: "Execute",
-          changes: "Changes",
-          artifactPreview: "Download file",
-          markerCompact: "Context compacted",
-          markerModelChange: "Model switched",
-          unsupportedRows: "Some content requires a newer version of ZCode",
-        };
+      : locale === "es-ES"
+        ? {
+            history: "Razonamiento",
+            computerUse: "Uso del ordenador",
+            explore: "Explorar",
+            execute: "Ejecutar",
+            changes: "Cambios",
+            artifactPreview: "Descargar archivo",
+            markerCompact: "Contexto compactado",
+            markerModelChange: "Modelo cambiado",
+            unsupportedRows: "Parte del contenido requiere una versión más reciente de ZCode",
+          }
+        : {
+            history: "Reasoning",
+            computerUse: "Computer use",
+            explore: "Explore",
+            execute: "Execute",
+            changes: "Changes",
+            artifactPreview: "Download file",
+            markerCompact: "Context compacted",
+            markerModelChange: "Model switched",
+            unsupportedRows: "Some content requires a newer version of ZCode",
+          };
   const artifactOpenContext = useMemo<ArtifactOpenContextValue | null>(() => {
     if (
       !workspacePath ||

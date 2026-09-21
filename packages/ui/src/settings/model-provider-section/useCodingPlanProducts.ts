@@ -250,12 +250,17 @@ function buildStaticProductsSnapshot(providerId: CodingPlanProviderId): CodingPl
 }
 
 function buildZaiStartStaticProducts(preview: StartPlanPreviewConfig): CodingPlanStaticProduct[] {
-  const isChineseLocale =
-    typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("zh");
+  const navigatorLanguage =
+    typeof navigator !== "undefined" ? navigator.language.toLowerCase() : "";
+  const numberFormatLocale = navigatorLanguage.startsWith("zh")
+    ? "zh-CN"
+    : navigatorLanguage.startsWith("es")
+      ? "es-ES"
+      : "en-US";
   const previewName = preview.name.trim() || "Z.ai Start";
   const equityList = preview.entitlements.map((entitlement) => ({
     productEquityTitle: entitlement.showName,
-    productEquityDetails: formatStartPlanPreviewEntitlement(entitlement, isChineseLocale),
+    productEquityDetails: formatStartPlanPreviewEntitlement(entitlement, numberFormatLocale),
   }));
 
   return [
@@ -303,11 +308,9 @@ function buildZaiStartStaticProducts(preview: StartPlanPreviewConfig): CodingPla
 
 function formatStartPlanPreviewEntitlement(
   entitlement: StartPlanPreviewConfig["entitlements"][number],
-  isChineseLocale: boolean,
+  numberFormatLocale: string,
 ): string {
-  const amount = new Intl.NumberFormat(isChineseLocale ? "zh-CN" : "en-US").format(
-    entitlement.grantUnits,
-  );
+  const amount = new Intl.NumberFormat(numberFormatLocale).format(entitlement.grantUnits);
   const unit = entitlement.unitType.trim();
   const period = entitlement.period.trim();
   return [amount, unit, period].filter(Boolean).join(" ");

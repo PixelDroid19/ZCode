@@ -279,22 +279,24 @@ const WARNING_MESSAGE_IDS: Readonly<
   input_attachment_unavailable: "conversationShare.warning.inputAttachmentUnavailable",
 };
 
-const ARTIFACT_TYPE_LABELS: Readonly<Record<string, { zh: string; en: string }>> = {
-  pdf: { zh: "PDF", en: "PDF" },
-  pptx: { zh: "PPT", en: "PowerPoint" },
-  docx: { zh: "Word 文档", en: "Word document" },
-  xlsx: { zh: "Excel 表格", en: "Excel spreadsheet" },
-  image: { zh: "图片", en: "image" },
-  html: { zh: "HTML", en: "HTML" },
-  md: { zh: "Markdown", en: "Markdown" },
-  text: { zh: "纯文本", en: "plain text" },
-  video: { zh: "视频", en: "video" },
-  audio: { zh: "音频", en: "audio" },
+const ARTIFACT_TYPE_LABELS: Readonly<Record<string, { zh: string; en: string; es: string }>> = {
+  pdf: { zh: "PDF", en: "PDF", es: "PDF" },
+  pptx: { zh: "PPT", en: "PowerPoint", es: "PowerPoint" },
+  docx: { zh: "Word 文档", en: "Word document", es: "documento de Word" },
+  xlsx: { zh: "Excel 表格", en: "Excel spreadsheet", es: "hoja de cálculo de Excel" },
+  image: { zh: "图片", en: "image", es: "imagen" },
+  html: { zh: "HTML", en: "HTML", es: "HTML" },
+  md: { zh: "Markdown", en: "Markdown", es: "Markdown" },
+  text: { zh: "纯文本", en: "plain text", es: "texto sin formato" },
+  video: { zh: "视频", en: "video", es: "vídeo" },
+  audio: { zh: "音频", en: "audio", es: "audio" },
 };
 
 function artifactLabel(value: string, locale: string): string {
   const key = value.replace(/^\./u, "").toLowerCase();
-  return ARTIFACT_TYPE_LABELS[key]?.[locale === "en-US" ? "en" : "zh"] ?? value.toUpperCase();
+  const labels = ARTIFACT_TYPE_LABELS[key];
+  if (!labels) return value.toUpperCase();
+  return locale === "zh-CN" ? labels.zh : locale === "es-ES" ? labels.es : labels.en;
 }
 
 export function formatConversationShareArtifactType(
@@ -313,12 +315,16 @@ export function formatConversationShareAllowedArtifacts(
     const labels = issue.allowedArtifacts.map((artifact) =>
       artifactLabel(artifact.displayName || artifact.type, locale),
     );
-    return [...new Set(labels)].join(locale === "en-US" ? ", " : "、");
+    return [...new Set(labels)].join(locale === "zh-CN" ? "、" : ", ");
   }
   if (issue.allowedFormats && issue.allowedFormats.length > 0) {
-    return issue.allowedFormats.join(locale === "en-US" ? ", " : "、");
+    return issue.allowedFormats.join(locale === "zh-CN" ? "、" : ", ");
   }
-  return locale === "en-US" ? "temporarily unavailable" : "暂时无法获取";
+  return locale === "zh-CN"
+    ? "暂时无法获取"
+    : locale === "es-ES"
+      ? "no disponible temporalmente"
+      : "temporarily unavailable";
 }
 
 export function resolveConversationShareWarningMessageId(
