@@ -29,7 +29,7 @@ const SHARE_LOGIN_PROVIDERS: readonly WebOAuthProviderId[] = [
   BIGMODEL_PROVIDER_ID,
 ];
 
-type ConversationShareLandingLocale = "zh-CN" | "en-US";
+type ConversationShareLandingLocale = "zh-CN" | "en-US" | "es-ES";
 type ConversationShareLandingState =
   | { kind: "loading" }
   | { kind: "login_required" }
@@ -168,11 +168,54 @@ const COPY: Record<ConversationShareLandingLocale, Copy> = {
     artifactCountOther: "{count} artifacts",
     retryOpen: "Try again",
   },
+  "es-ES": {
+    brand: "ZCode Conversation Share",
+    loading: "Cargando conversación compartida",
+    loadingDescription: "Espera mientras verificamos este enlace compartido.",
+    loginTitle: "Inicia sesión para ver esta compartición",
+    loginDescription: "Inicia sesión para comprobar si puedes ver esta conversación compartida.",
+    login: "Iniciar sesión",
+    loginWith: {
+      zai: "Conectar con Z.ai",
+      bigmodel: "Conectar con BigModel",
+    },
+    loginRegion: { zai: "Global", bigmodel: "CN" },
+    expiredTitle: "La compartición caducó",
+    expiredDescription: "Este enlace compartido ha caducado. Pide al autor que cree uno nuevo.",
+    notFoundTitle: "Compartición no encontrada",
+    notFoundDescription:
+      "El enlace puede ser inválido, la compartición puede haberse eliminado, o tu cuenta actual no tiene acceso.",
+    notFoundAccountHint:
+      "Z.ai y BigModel no comparten datos de cuenta. Comprueba si elegiste la plataforma de inicio de sesión equivocada o usaste otra cuenta.",
+    backToHome: "Volver al inicio",
+    networkTitle: "No se pudo cargar la compartición",
+    networkDescription: "Comprueba tu conexión de red e inténtalo de nuevo.",
+    invalidTitle: "Contenido compartido inválido",
+    invalidDescription: "El contenido compartido no superó el contrato de seguridad pública.",
+    outdatedTitle: "Actualiza ZCode para continuar",
+    outdatedDescription:
+      "Esta compartición fue creada por una versión más reciente de ZCode. Actualiza para verla.",
+    unavailableTitle: "Compartición no disponible",
+    unavailableDescription:
+      "Esta cuenta no tiene permiso para ver la compartición, o ya no existe.",
+    retry: "Reintentar",
+    continueInZCode: "Continuar en ZCode",
+    switchToDarkTheme: "Cambiar a tema oscuro",
+    switchToLightTheme: "Cambiar a tema claro",
+    continueHelp: "Si ZCode no se abrió, descarga la app o inténtalo de nuevo.",
+    downloadZCode: "Descargar ZCode",
+    artifactCountOne: "{count} artefacto",
+    artifactCountOther: "{count} artefactos",
+    retryOpen: "Intentar de nuevo",
+  },
 };
 
 function localeOf(locale?: ConversationShareLandingLocale): ConversationShareLandingLocale {
   if (locale) return locale;
-  return /^zh(?:-|$)/iu.test(globalThis.navigator?.language ?? "") ? "zh-CN" : "en-US";
+  const language = globalThis.navigator?.language ?? "";
+  if (/^zh(?:-|$)/iu.test(language)) return "zh-CN";
+  if (/^es(?:-|$)/iu.test(language)) return "es-ES";
+  return "en-US";
 }
 
 function formatDate(timestamp: number, locale: ConversationShareLandingLocale): string {

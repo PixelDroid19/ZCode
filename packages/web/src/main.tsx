@@ -121,6 +121,7 @@ async function renderConversationSharePage(): Promise<void> {
   document.documentElement.lang = routeLocale;
   // 分享页必须设置 title：否则浏览器标签只显示 index.html 的通用标题。
   // 会话标题要等 preview 加载完，先给一个语言正确的兜底。
+  // 品牌名在各语言下保持一致；只有中文站需要单独的本地化标题。
   document.title = routeLocale === "zh-CN" ? "ZCode 会话分享" : "ZCode Conversation Share";
   const shareCode = resolveConversationShareCodeFromPath(window.location.pathname);
   if (!shareCode) {
@@ -241,7 +242,8 @@ function createWebPlatform(): IPlatformService {
       window.open(feedbackUrl, "_blank", "noopener,noreferrer");
     },
     openCommunity: async () => {
-      const locale = document.documentElement.lang === "en-US" ? "en-US" : "zh-CN";
+      const lang = document.documentElement.lang;
+      const locale = lang === "zh-CN" ? "zh-CN" : lang === "es-ES" ? "es-ES" : "en-US";
       const communityUrl = await resolveWebCommunityUrl(locale);
       if (!communityUrl) {
         return;

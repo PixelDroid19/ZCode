@@ -1,4 +1,4 @@
-type WebAuthLocale = "zh-CN" | "en-US";
+type WebAuthLocale = "zh-CN" | "en-US" | "es-ES";
 
 interface WebAuthPageCopy {
   brand: string;
@@ -48,6 +48,23 @@ const WEB_AUTH_COPY = {
     signedInAs: "Signed in as",
     logoutAction: "Disconnect",
   },
+  "es-ES": {
+    brand: "ZCode",
+    loginTitle: "Inicia sesión para continuar",
+    loginDescription:
+      "Usa la misma identidad de cuenta Z.AI del escritorio para el control remoto web.",
+    loginAction: "Iniciar sesión con Z.AI",
+    callbackTitle: "Completando el inicio de sesión",
+    callbackDescription: "Verificando la identidad de tu cuenta.",
+    callbackErrorTitle: "Error de inicio de sesión",
+    callbackErrorDescription: "El flujo de autorización no se completó. Inicia sesión de nuevo.",
+    retryAction: "Iniciar sesión de nuevo",
+    waitingTitle: "Sesión iniciada",
+    waitingDescription:
+      "La selección de dispositivo llegará próximamente. Esta cuenta aún no tiene un destino remoto seleccionado.",
+    signedInAs: "Sesión iniciada como",
+    logoutAction: "Desconectar",
+  },
 } satisfies Record<WebAuthLocale, WebAuthPageCopy>;
 
 function resolveWebAuthLocale(language?: string): WebAuthLocale {
@@ -58,7 +75,10 @@ function resolveWebAuthLocale(language?: string): WebAuthLocale {
     navigator.languages?.[0] ??
     "";
 
-  return candidate.toLowerCase().startsWith("zh") ? "zh-CN" : "en-US";
+  const lower = candidate.toLowerCase();
+  if (lower.startsWith("zh")) return "zh-CN";
+  if (lower.startsWith("es")) return "es-ES";
+  return "en-US";
 }
 
 export function getWebAuthCopy(locale: WebAuthLocale = resolveWebAuthLocale()): WebAuthPageCopy {

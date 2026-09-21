@@ -63,7 +63,9 @@ export function parseConversationShareRoute(pathname: string): string | null {
 export function resolveConversationShareRouteLocale(pathname: string): Locale {
   const parsed = parseConversationSharePathname(pathname);
   if (parsed) return parsed.locale;
-  return /^zh(?:-|$)/iu.test(navigator.language) ? "zh-CN" : "en-US";
+  if (/^zh(?:-|$)/iu.test(navigator.language)) return "zh-CN";
+  if (/^es(?:-|$)/iu.test(navigator.language)) return "es-ES";
+  return "en-US";
 }
 
 export function buildShareImportDeepLink(shareCode: string): string {
