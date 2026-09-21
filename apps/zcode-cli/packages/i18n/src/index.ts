@@ -1,5 +1,6 @@
 import type { UiLocale, SupportedLocale } from "@zcode/contracts";
 import { enUS } from "./locales/en-US.js";
+import { esES } from "./locales/es-ES.js";
 import { zhCN } from "./locales/zh-CN.js";
 import {
   DEFAULT_LOCALE,
@@ -24,6 +25,7 @@ export type { CliCopy, TuiCopy, UiLocale, SupportedLocale, ZCodeCopy } from "./t
 
 const CATALOGS: Record<SupportedLocale, ZCodeCopy> = {
   "en-US": enUS,
+  "es-ES": esES,
   "zh-CN": zhCN,
 };
 

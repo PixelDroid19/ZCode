@@ -110,10 +110,11 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "developer-tools",
       displayName: "Android Emulator",
-      displayName_i18n: { "zh-CN": "Android 模拟器" },
+      displayName_i18n: { "zh-CN": "Android 模拟器", "es-ES": "Emulador de Android" },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/android-emulator/icon.png`,
       description_i18n: {
         "zh-CN": "提供 Android 开发工作流与模拟器自动化能力。",
+        "es-ES": "Proporciona flujos de trabajo de desarrollo Android y automatización del emulador.",
       },
     },
     name: "android-emulator",
@@ -134,10 +135,11 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "productivity",
       displayName: "Browser Use",
-      displayName_i18n: { "zh-CN": "浏览器操作" },
+      displayName_i18n: { "zh-CN": "浏览器操作", "es-ES": "Operación del navegador" },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/browser-use/icon.png`,
       description_i18n: {
         "zh-CN": "操作 ZCode 内置浏览器，检查网页并验证交互。",
+        "es-ES": "Opera el navegador integrado de ZCode, inspecciona páginas web y verifica interacciones.",
       },
     },
     name: OFFICIAL_BROWSER_USE_PLUGIN_NAME,
@@ -154,22 +156,25 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
   },
   ...(
     [
-      ["documents", "docx", "Documents", "Word文档"],
-      ["pdf", "pdf", "PDF", "PDF"],
-      ["presentations", "pptx", "Presentations", "演示文档"],
-      ["spreadsheets", "xlsx", "Spreadsheets", "电子表格"],
+      ["documents", "docx", "Documents", "Word文档", "documentos de Word"],
+      ["pdf", "pdf", "PDF", "PDF", "PDF"],
+      ["presentations", "pptx", "Presentations", "演示文档", "presentaciones"],
+      ["spreadsheets", "xlsx", "Spreadsheets", "电子表格", "hojas de cálculo"],
     ] as const
   ).map(
-    ([name, skill, displayName, chineseName]): OfficialPluginDefinition => ({
+    ([name, skill, displayName, chineseName, spanishName]): OfficialPluginDefinition => ({
       defaultEnabled: true,
       listing: {
         author: ZAI_AUTHOR,
         category: "productivity",
         displayName,
-        displayName_i18n: { "zh-CN": chineseName },
+        displayName_i18n: { "zh-CN": chineseName, "es-ES": displayName },
         // 复用已发布的文档图标，拆分插件无需依赖新 CDN 资源。
         icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/document-skills/icon.png`,
-        description_i18n: { "zh-CN": `创建、编辑与审阅${chineseName}（${skill.toUpperCase()}）。` },
+        description_i18n: {
+          "zh-CN": `创建、编辑与审阅${chineseName}（${skill.toUpperCase()}）。`,
+          "es-ES": `Crea, edita y revisa ${spanishName} (${skill.toUpperCase()}).`,
+        },
       },
       name,
       requiredSeedPaths: ["agents/visual-judge.md", `skills/${skill}/SKILL.md`],
@@ -189,8 +194,11 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "productivity",
       displayName: "Image Search",
-      displayName_i18n: { "zh-CN": "搜图" },
-      description_i18n: { "zh-CN": "查找插图与参考配图。" },
+      displayName_i18n: { "zh-CN": "搜图", "es-ES": "Búsqueda de imágenes" },
+      description_i18n: {
+        "zh-CN": "查找插图与参考配图。",
+        "es-ES": "Encuentra ilustraciones e imágenes de referencia.",
+      },
     },
     name: "image-search",
     requiredSeedPaths: [".mcp.json"],
@@ -207,10 +215,11 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "developer-tools",
       displayName: "iOS Simulator",
-      displayName_i18n: { "zh-CN": "iOS 模拟器" },
+      displayName_i18n: { "zh-CN": "iOS 模拟器", "es-ES": "Simulador de iOS" },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/ios-simulator/icon.png`,
       description_i18n: {
         "zh-CN": "提供 iOS 开发工作流与模拟器自动化能力。",
+        "es-ES": "Proporciona flujos de trabajo de desarrollo iOS y automatización del simulador.",
       },
     },
     name: "ios-simulator",
@@ -227,10 +236,11 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "utilities",
       displayName: "Restore Legacy Sessions",
-      displayName_i18n: { "zh-CN": "恢复旧版会话" },
+      displayName_i18n: { "zh-CN": "恢复旧版会话", "es-ES": "Restaurar sesiones antiguas" },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/restore-legacy-sessions/icon.png`,
       description_i18n: {
         "zh-CN": "将旧版会话恢复为 ZCode 任务与会话记录。",
+        "es-ES": "Restaura sesiones antiguas como tareas y registros de sesión de ZCode.",
       },
     },
     name: "restore-legacy-sessions",
@@ -251,9 +261,11 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       category: "utilities",
       displayName: "Plugin Creator",
       // 创建器使用客户端自带图标，不再借用 skill-creator 的远端图片。
-      displayName_i18n: { "zh-CN": "插件创建器" },
+      displayName_i18n: { "zh-CN": "插件创建器", "es-ES": "Creador de plugins" },
       description_i18n: {
         "zh-CN": "开发、校验 ZCode 插件，完成本地 dev 市场安装、试用与更新。",
+        "es-ES":
+          "Desarrolla y valida plugins de ZCode, con instalación, prueba y actualización en el marketplace dev local.",
       },
     },
     rootCandidates: [
@@ -279,9 +291,12 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "utilities",
       displayName: "Skill Creator",
-      displayName_i18n: { "zh-CN": "技能创建器" },
+      displayName_i18n: { "zh-CN": "技能创建器", "es-ES": "Creador de skills" },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/skill-creator/icon.png`,
-      description_i18n: { "zh-CN": "创建、编辑和验证可复用的 ZCode 技能。" },
+      description_i18n: {
+        "zh-CN": "创建、编辑和验证可复用的 ZCode 技能。",
+        "es-ES": "Crea, edita y valida skills reutilizables de ZCode.",
+      },
     },
     name: "skill-creator",
     rootCandidates: [
@@ -300,10 +315,12 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "utilities",
       displayName: "ZCode Guide",
-      displayName_i18n: { "zh-CN": "ZCode 使用指南" },
+      displayName_i18n: { "zh-CN": "ZCode 使用指南", "es-ES": "Guía de uso de ZCode" },
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/zcode-guide/icon.png`,
       description_i18n: {
         "zh-CN": "提供 ZCode 配置指南与插件、技能、MCP、命令和钩子诊断。",
+        "es-ES":
+          "Guía de configuración de ZCode y diagnóstico de plugins, skills, MCP, comandos y hooks.",
       },
       examplePrompts: [
         "How do I configure MCP servers in ZCode?",
@@ -311,6 +328,10 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       ],
       examplePrompts_i18n: {
         "zh-CN": ["ZCode 里怎么配置 MCP 服务器？", "帮我诊断当前的 ZCode 配置"],
+        "es-ES": [
+          "¿Cómo configuro servidores MCP en ZCode?",
+          "Diagnostica mi configuración actual de ZCode",
+        ],
       },
     },
     name: "zcode-guide",
@@ -341,9 +362,11 @@ export const OFFICIAL_PLUGIN_DEFINITIONS: readonly OfficialPluginDefinition[] = 
       author: ZAI_AUTHOR,
       category: "productivity",
       displayName: "Computer Use",
-      displayName_i18n: { "zh-CN": "电脑控制" },
+      displayName_i18n: { "zh-CN": "电脑控制", "es-ES": "Control del ordenador" },
       description_i18n: {
         "zh-CN": "自动化桌面应用：智能体驱动鼠标、键盘与界面元素，代你完成实际任务。",
+        "es-ES":
+          "Automatiza apps de escritorio: el agente controla el ratón, el teclado y los elementos de la interfaz para completar tareas reales por ti.",
       },
       // 插件更名为 computer-use 后，CDN 图标仍发布在 zcode-cua 目录；沿用资源路径避免 404。
       icon: `${OFFICIAL_PLUGIN_ASSETS_BASE_URL}/zcode-cua/icon.png`,
