@@ -56,6 +56,7 @@ export function getCommunityUrlsFromConfig(config: unknown): LocaleUrlMap {
   return {
     "zh-CN": sanitizeUrl(rawCommunityUrls["zh-CN"]),
     "en-US": sanitizeUrl(rawCommunityUrls["en-US"]),
+    "es-ES": sanitizeUrl(rawCommunityUrls["es-ES"]),
   };
 }
 

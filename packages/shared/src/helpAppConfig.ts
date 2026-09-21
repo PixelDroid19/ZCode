@@ -7,6 +7,7 @@ const helpConfigSchema = z.object({
     .object({
       "zh-CN": z.string().optional().catch(undefined),
       "en-US": z.string().optional().catch(undefined),
+      "es-ES": z.string().optional().catch(undefined),
     })
     .optional()
     .catch(undefined),
@@ -37,6 +38,7 @@ export function resolveHelpAppConfig(remote: unknown, local: unknown): HelpAppCo
     community_urls: {
       "zh-CN": getCommunityUrlFromConfigs(remoteConfig, localConfig, "zh-CN"),
       "en-US": getCommunityUrlFromConfigs(remoteConfig, localConfig, "en-US"),
+      "es-ES": getCommunityUrlFromConfigs(remoteConfig, localConfig, "es-ES"),
     },
     feedback_url: getFeedbackUrlFromConfig(remoteConfig) ?? getFeedbackUrlFromConfig(localConfig),
     // false 是远端明确配置，不能按 truthy 判断后回退到本地 true。

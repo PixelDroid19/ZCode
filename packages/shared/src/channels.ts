@@ -464,7 +464,7 @@ export interface CodingPlanPurchaseCompletePayload {
  * 官网页 window.__zcodeLang__ 的取值，与 App IntlProvider 的 Locale 一致。
  * App locale 变化时通过 executeJavaScript 重写此变量并派发 lang-change 事件。
  */
-export type CodingPlanWebviewLocale = "zh-CN" | "en-US";
+export type CodingPlanWebviewLocale = "zh-CN" | "en-US" | "es-ES";
 
 /**
  * 官网页 lang-change 事件 detail。App 用 executeJavaScript 在 main world 派发

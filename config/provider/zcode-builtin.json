@@ -8,7 +8,8 @@
           "templateId": "zai-api",
           "templateNameMap": {
             "zh-CN": "Z.ai Coding Plan",
-            "en-US": "Z.ai Coding Plan"
+            "en-US": "Z.ai Coding Plan",
+            "es-ES": "Z.ai Coding Plan"
           },
           "config": {
             "access": {
@@ -30,7 +31,8 @@
           "templateId": "zai-standard-api",
           "templateNameMap": {
             "zh-CN": "Z.ai API",
-            "en-US": "Z.ai API"
+            "en-US": "Z.ai API",
+            "es-ES": "Z.ai API"
           },
           "config": {
             "access": {
@@ -77,7 +79,8 @@
           "templateId": "bigmodel-api",
           "templateNameMap": {
             "zh-CN": "BigModel Coding Plan",
-            "en-US": "BigModel Coding Plan"
+            "en-US": "BigModel Coding Plan",
+            "es-ES": "BigModel Coding Plan"
           },
           "config": {
             "access": {
@@ -99,7 +102,8 @@
           "templateId": "bigmodel-standard-api",
           "templateNameMap": {
             "zh-CN": "BigModel API",
-            "en-US": "BigModel API"
+            "en-US": "BigModel API",
+            "es-ES": "BigModel API"
           },
           "config": {
             "access": {
@@ -146,7 +150,8 @@
           "templateId": "moonshot-kimi",
           "templateNameMap": {
             "zh-CN": "Kimi",
-            "en-US": "Kimi"
+            "en-US": "Kimi",
+            "es-ES": "Kimi"
           },
           "config": {
             "access": {
@@ -175,7 +180,8 @@
           "templateId": "minimax",
           "templateNameMap": {
             "zh-CN": "MiniMax",
-            "en-US": "MiniMax"
+            "en-US": "MiniMax",
+            "es-ES": "MiniMax"
           },
           "config": {
             "access": {
@@ -206,7 +212,8 @@
           "templateId": "deepseek",
           "templateNameMap": {
             "zh-CN": "DeepSeek",
-            "en-US": "DeepSeek"
+            "en-US": "DeepSeek",
+            "es-ES": "DeepSeek"
           },
           "config": {
             "access": {
@@ -228,7 +235,8 @@
           "templateId": "qwen-alibaba-model-studio-cn",
           "templateNameMap": {
             "zh-CN": "阿里云百炼（中国）",
-            "en-US": "Alibaba Cloud (China)"
+            "en-US": "Alibaba Cloud (China)",
+            "es-ES": "Alibaba Cloud (China)"
           },
           "config": {
             "access": {
@@ -264,7 +272,8 @@
           "templateId": "qwen-alibaba-model-studio-intl",
           "templateNameMap": {
             "zh-CN": "阿里云百炼（国际）",
-            "en-US": "Alibaba Cloud (Global)"
+            "en-US": "Alibaba Cloud (Global)",
+            "es-ES": "Alibaba Cloud (Global)"
           },
           "config": {
             "access": {
@@ -301,7 +310,8 @@
           "templateId": "xiaomi-mimo",
           "templateNameMap": {
             "zh-CN": "Xiaomi MiMo",
-            "en-US": "Xiaomi MiMo"
+            "en-US": "Xiaomi MiMo",
+            "es-ES": "Xiaomi MiMo"
           },
           "config": {
             "access": {
@@ -323,7 +333,8 @@
           "templateId": "openai",
           "templateNameMap": {
             "zh-CN": "OpenAI",
-            "en-US": "OpenAI"
+            "en-US": "OpenAI",
+            "es-ES": "OpenAI"
           },
           "config": {
             "access": {
@@ -356,7 +367,8 @@
           "templateId": "anthropic",
           "templateNameMap": {
             "zh-CN": "Anthropic",
-            "en-US": "Anthropic"
+            "en-US": "Anthropic",
+            "es-ES": "Anthropic"
           },
           "config": {
             "access": {
@@ -384,7 +396,8 @@
           "templateId": "xai",
           "templateNameMap": {
             "zh-CN": "xAI",
-            "en-US": "xAI"
+            "en-US": "xAI",
+            "es-ES": "xAI"
           },
           "config": {
             "access": {
@@ -406,7 +419,8 @@
           "templateId": "openrouter",
           "templateNameMap": {
             "zh-CN": "OpenRouter",
-            "en-US": "OpenRouter"
+            "en-US": "OpenRouter",
+            "es-ES": "OpenRouter"
           },
           "config": {
             "access": {
@@ -488,7 +502,8 @@
           "templateId": "opencode-go-chat",
           "templateNameMap": {
             "zh-CN": "OpenCode Go (Chat)",
-            "en-US": "OpenCode Go (Chat)"
+            "en-US": "OpenCode Go (Chat)",
+            "es-ES": "OpenCode Go (Chat)"
           },
           "config": {
             "access": {
@@ -526,7 +541,8 @@
           "templateId": "opencode-go-messages",
           "templateNameMap": {
             "zh-CN": "OpenCode Go (Anthropic)",
-            "en-US": "OpenCode Go (Anthropic)"
+            "en-US": "OpenCode Go (Anthropic)",
+            "es-ES": "OpenCode Go (Anthropic)"
           },
           "config": {
             "access": {
@@ -557,7 +573,8 @@
           "templateId": "opencode-go-responses",
           "templateNameMap": {
             "zh-CN": "OpenCode Go (Responses)",
-            "en-US": "OpenCode Go (Responses)"
+            "en-US": "OpenCode Go (Responses)",
+            "es-ES": "OpenCode Go (Responses)"
           },
           "config": {
             "access": {
@@ -579,7 +596,8 @@
           "templateId": "opencode-zen-responses",
           "templateNameMap": {
             "zh-CN": "OpenCode Zen (Responses)",
-            "en-US": "OpenCode Zen (Responses)"
+            "en-US": "OpenCode Zen (Responses)",
+            "es-ES": "OpenCode Zen (Responses)"
           },
           "config": {
             "access": {
@@ -616,7 +634,8 @@
           "templateId": "opencode-zen-messages",
           "templateNameMap": {
             "zh-CN": "OpenCode Zen (Anthropic)",
-            "en-US": "OpenCode Zen (Anthropic)"
+            "en-US": "OpenCode Zen (Anthropic)",
+            "es-ES": "OpenCode Zen (Anthropic)"
           },
           "config": {
             "access": {
@@ -654,7 +673,8 @@
           "templateId": "opencode-zen-chat",
           "templateNameMap": {
             "zh-CN": "OpenCode Zen (Chat)",
-            "en-US": "OpenCode Zen (Chat)"
+            "en-US": "OpenCode Zen (Chat)",
+            "es-ES": "OpenCode Zen (Chat)"
           },
           "config": {
             "access": {
