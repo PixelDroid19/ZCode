@@ -66,6 +66,35 @@ function buildForceUpdatePromptMessages(locale: Locale) {
     };
   }
 
+  if (locale === "es-ES") {
+    return {
+      checkingTitle: "Buscando actualizaciones",
+      checkingMessage: "Mantén esta ventana abierta mientras ZCode busca actualizaciones.",
+      downloadingTitle: "Descargando actualización",
+      downloadingVersionTitle: "Descargando actualización v{version}",
+      downloadingMessage:
+        "ZCode instalará la actualización automáticamente al terminar la descarga.",
+      readyTitle: "Actualización descargada",
+      readyMessage: "ZCode se está preparando para reiniciar e instalar la actualización.",
+      installingTitle: "Instalando actualización",
+      installingMessage: "ZCode se reiniciará para terminar de instalar la actualización.",
+      errorTitle: "La actualización automática falló",
+      errorMessage: "Puedes reintentar la actualización automática o usar la manual.",
+      devSkippedTitle: "La actualización automática no está disponible en desarrollo",
+      devSkippedMessage:
+        "La actualización automática solo está disponible en apps empaquetadas. Usa la actualización manual o prueba una compilación empaquetada.",
+      confirmCloseTitle: "Actualización automática en curso",
+      confirmCloseMessage:
+        "Cerrar esta ventana detendrá la actualización automática actual, y esta versión antigua aún no podrá abrir la app principal. Puedes seguir esperando o cerrar y salir.",
+      confirmCloseButton: "Cerrar de todos modos",
+      continueUpdateButton: "Continuar actualización",
+      retryButton: "Reintentar actualización automática",
+      checkingButton: "Comprobando...",
+      downloadingButton: "Descargando...",
+      installingButton: "Instalando...",
+    };
+  }
+
   return {
     checkingTitle: "Checking for updates",
     checkingMessage: "Keep this window open while ZCode checks for updates.",

@@ -346,9 +346,10 @@ function notifyForceAutoUpdate(state: ForceAutoUpdateState) {
 }
 
 function getForceAutoUpdateNoUpdateMessage(): string {
-  return menuLocale === "zh-CN"
-    ? "未找到可安装更新，请使用手动升级。"
-    : "No installable update was found. Use manual update instead.";
+  if (menuLocale === "zh-CN") return "未找到可安装更新，请使用手动升级。";
+  if (menuLocale === "es-ES")
+    return "No se encontró ninguna actualización instalable. Usa la actualización manual.";
+  return "No installable update was found. Use manual update instead.";
 }
 
 function normalizeProgressPercent(progress: unknown): string | undefined {
@@ -626,7 +627,7 @@ function normalizeLocalizedReleaseNotes(
     return undefined;
   }
 
-  for (const locale of ["zh-CN", "en-US"] as const) {
+  for (const locale of ["zh-CN", "en-US", "es-ES"] as const) {
     const entry = releaseNotesByLocale[locale];
     if (!entry) {
       continue;

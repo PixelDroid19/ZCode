@@ -65,8 +65,7 @@ function formatArchitectureMismatchDialogText(
   mismatch: ArchitectureMismatch,
   locale: Locale,
 ): ArchitectureMismatchDialogText {
-  const isZh = locale === "zh-CN";
-  if (isZh) {
+  if (locale === "zh-CN") {
     return {
       title: "架构不匹配",
       message: "当前安装的不是适配本机的版本",
@@ -76,6 +75,19 @@ function formatArchitectureMismatchDialogText(
         `建议前往官网下载并安装 ${mismatch.nativeArch} 原生版本以获得最佳性能。`,
       downloadButton: "前往下载",
       dismissButton: "暂不处理",
+    };
+  }
+
+  if (locale === "es-ES") {
+    return {
+      title: "Arquitectura incompatible",
+      message: "La versión instalada no es la adecuada para este equipo",
+      detail:
+        `Estás ejecutando la compilación ${mismatch.binaryArch}, pero este equipo es ${mismatch.nativeArch}. ` +
+        `Actualmente funciona mediante traducción del sistema, lo que es más lento y consume más energía.\n\n` +
+        `Descarga e instala la compilación nativa ${mismatch.nativeArch} para obtener el mejor rendimiento.`,
+      downloadButton: "Descargar",
+      dismissButton: "Ahora no",
     };
   }
 

@@ -204,6 +204,17 @@ function formatForceUpdateDialogText(
     };
   }
 
+  if (locale === "es-ES") {
+    return {
+      title: "Actualiza ZCode",
+      message: "Esta versión ya no se puede usar",
+      detail: `Versión actual: v${requirement.currentVersion}\nVersión mínima soportada: v${requirement.minimalVersion}`,
+      autoUpdateButton: "Actualización automática",
+      manualUpdateButton: "Actualización manual",
+      quitButton: "Salir",
+    };
+  }
+
   return {
     title: "Update ZCode",
     message: "The current version can no longer be used",

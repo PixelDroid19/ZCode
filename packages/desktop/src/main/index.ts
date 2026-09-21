@@ -1315,12 +1315,15 @@ function confirmAppQuit(originWindow?: BrowserWindow | null) {
   }
 
   const isZh = currentApplicationLocale === "zh-CN";
+  const isEs = currentApplicationLocale === "es-ES";
   const runningAgentSessionCount = getRunningAgentSessionCount();
   const detailLines = [
     runningAgentSessionCount > 0
       ? isZh
         ? `正在进行的会话：${runningAgentSessionCount} 个，退出后会被中断。`
-        : `In-progress sessions: ${runningAgentSessionCount}. They will be interrupted after quitting.`
+        : isEs
+          ? `Sesiones en curso: ${runningAgentSessionCount}. Se interrumpirán al salir.`
+          : `In-progress sessions: ${runningAgentSessionCount}. They will be interrupted after quitting.`
       : null,
   ].filter((line): line is string => line !== null);
   const targetWindow =
@@ -1331,11 +1334,11 @@ function confirmAppQuit(originWindow?: BrowserWindow | null) {
         null);
   const dialogOptions = {
     type: "question" as const,
-    buttons: isZh ? ["退出", "取消"] : ["Quit", "Cancel"],
+    buttons: isZh ? ["退出", "取消"] : isEs ? ["Salir", "Cancelar"] : ["Quit", "Cancel"],
     defaultId: 1,
     cancelId: 1,
-    title: isZh ? "退出确认" : "Confirm Quit",
-    message: isZh ? "确认退出 Z Code?" : "Quit Z Code?",
+    title: isZh ? "退出确认" : isEs ? "Confirmar salida" : "Confirm Quit",
+    message: isZh ? "确认退出 Z Code?" : isEs ? "¿Salir de Z Code?" : "Quit Z Code?",
     detail: detailLines.join("\n"),
     icon: nativeImage.createFromPath(iconPath),
   };

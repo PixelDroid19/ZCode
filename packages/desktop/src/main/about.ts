@@ -81,6 +81,13 @@ const ABOUT_MESSAGES: Record<
     optimizedForAppleSilicon: "Optimized for Apple Silicon.",
     copyright: (year) => `Copyright © ${year} ZCode.`,
   },
+  "es-ES": {
+    aboutTitle: "Acerca de ZCode",
+    versionLabel: "versión",
+    okButtonLabel: "Aceptar",
+    optimizedForAppleSilicon: "Optimizado para Apple Silicon.",
+    copyright: (year) => `Copyright © ${year} ZCode.`,
+  },
 };
 
 function normalizeValue(value: string | undefined | null): string {

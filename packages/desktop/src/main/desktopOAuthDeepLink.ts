@@ -150,6 +150,16 @@ export function resolveExternalWorkspaceOpenDialogCopy(
     };
   }
 
+  if (locale === "es-ES") {
+    return {
+      buttons: ["Abrir carpeta", "Cancelar"],
+      title: "¿Abrir enlace externo de ZCode?",
+      message: "¿Abrir esta carpeta en ZCode?",
+      detail: (path) =>
+        `${path}\n\nAbre solo carpetas de fuentes de confianza. La configuración del proyecto puede afectar al runtime del agente.`,
+    };
+  }
+
   return {
     buttons: ["Open folder", "Cancel"],
     title: "Open external ZCode link?",
