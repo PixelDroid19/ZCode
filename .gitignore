@@ -69,3 +69,9 @@ packages/desktop/.e2e-artifacts/
 packages/desktop/.e2e-cache/
 packages/desktop/.e2e-network-capture/
 .zcode-runtime/
+
+# tsup/vite 加载 ts 配置时会现编出 *.bundled_<hash>.{mjs,cjs,js} 临时文件，
+# 正常退出会自行清理；进程被 SIGKILL/Ctrl+C 打断时残留在包目录，属可再生临时产物。
+*.bundled_*.mjs
+*.bundled_*.cjs
+*.bundled_*.js
