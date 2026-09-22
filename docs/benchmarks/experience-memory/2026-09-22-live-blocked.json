@@ -1,0 +1,272 @@
+{
+  "protocol": "shared-experience-memory-v1",
+  "startedAt": "2026-09-22T18:27:33.690Z",
+  "commit": "41cabf884509f59d87762b55e99018492babe4a5",
+  "sourceSha256": "97a258acfc245e5dbd73c1b0ce9b6d5fe37d9f7f904fc839c7f57ec0feded540",
+  "selection": {
+    "providerId": "opencode-zen-responses",
+    "modelId": "muse-spark-1.3-contributor-free",
+    "options": {
+      "reasoningLevel": "disabled"
+    }
+  },
+  "replicas": 2,
+  "runtime": {
+    "node": "v24.14.0",
+    "platform": "linux",
+    "architecture": "x64"
+  },
+  "limitations": [
+    "Synthetic pilot; not a coding benchmark",
+    "No statistical generalization from two replicas",
+    "Provider sampling defaults; deterministic sampling is not promised"
+  ],
+  "observations": [
+    {
+      "replica": 0,
+      "arm": "off",
+      "phase": "learning",
+      "id": "initial-0",
+      "turn": {
+        "response": "",
+        "error": {
+          "name": "Error",
+          "code": "UNKNOWN_ERROR"
+        },
+        "extractionModelMs": 0,
+        "unexpectedOperations": [],
+        "elapsedMs": 806,
+        "foregroundUsage": {
+          "calls": 1,
+          "errors": 1,
+          "missingUsage": 1,
+          "complete": false,
+          "webSearchRequests": null,
+          "webFetchRequests": null,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cacheReadTokens": null,
+          "cacheWriteTokens": null,
+          "reasoningTokens": null
+        },
+        "extractionUsage": {
+          "calls": 0,
+          "errors": 0,
+          "missingUsage": 0,
+          "complete": false,
+          "webSearchRequests": null,
+          "webFetchRequests": null,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cacheReadTokens": null,
+          "cacheWriteTokens": null,
+          "reasoningTokens": null
+        },
+        "totalUsage": {
+          "calls": 1,
+          "errors": 1,
+          "missingUsage": 1,
+          "complete": false,
+          "webSearchRequests": null,
+          "webFetchRequests": null,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cacheReadTokens": null,
+          "cacheWriteTokens": null,
+          "reasoningTokens": null
+        },
+        "calls": [
+          {
+            "operation": "agent_step",
+            "durationMs": 543,
+            "recalled": false,
+            "options": {
+              "reasoningLevel": "disabled",
+              "maxOutputTokens": 131072
+            },
+            "memoryContext": [],
+            "error": {
+              "name": "AiSdkModelAdapterError",
+              "code": "provider_not_configured",
+              "status": 403
+            }
+          }
+        ],
+        "attempts": [
+          {
+            "type": "model_request_failed",
+            "operation": "agent_step",
+            "attempt": 1,
+            "durationMs": 540,
+            "error": {
+              "code": "provider_not_configured",
+              "status": 403,
+              "reason": "auth_failed"
+            }
+          }
+        ],
+        "physicalUsage": {
+          "calls": 1,
+          "errors": 1,
+          "missingUsage": 1,
+          "complete": false,
+          "webSearchRequests": null,
+          "webFetchRequests": null,
+          "inputTokens": null,
+          "outputTokens": null,
+          "totalTokens": null,
+          "cacheReadTokens": null,
+          "cacheWriteTokens": null,
+          "reasoningTokens": null
+        },
+        "mutatingForegroundCalls": 0
+      }
+    }
+  ],
+  "snapshots": [],
+  "status": "blocked",
+  "error": {
+    "name": "Error"
+  },
+  "finishedAt": "2026-09-22T18:27:34.539Z",
+  "summary": {
+    "off": {
+      "passed": 0,
+      "evaluated": 0,
+      "malformed": 0,
+      "operationalErrors": 1,
+      "protocolViolations": [],
+      "elapsedMs": 806,
+      "queryElapsedMs": 0,
+      "drainWaitMs": 0,
+      "extractionModelMs": 0,
+      "allUsage": {
+        "calls": 1,
+        "errors": 1,
+        "missingUsage": 1,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      },
+      "physicalUsage": {
+        "calls": 1,
+        "errors": 1,
+        "missingUsage": 1,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      },
+      "queryUsage": {
+        "calls": 0,
+        "errors": 0,
+        "missingUsage": 0,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      },
+      "extractionUsage": {
+        "calls": 0,
+        "errors": 0,
+        "missingUsage": 0,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      }
+    },
+    "on": {
+      "passed": 0,
+      "evaluated": 0,
+      "malformed": 0,
+      "operationalErrors": 0,
+      "protocolViolations": [],
+      "elapsedMs": 0,
+      "queryElapsedMs": 0,
+      "drainWaitMs": 0,
+      "extractionModelMs": 0,
+      "allUsage": {
+        "calls": 0,
+        "errors": 0,
+        "missingUsage": 0,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      },
+      "physicalUsage": {
+        "calls": 0,
+        "errors": 0,
+        "missingUsage": 0,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      },
+      "queryUsage": {
+        "calls": 0,
+        "errors": 0,
+        "missingUsage": 0,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      },
+      "extractionUsage": {
+        "calls": 0,
+        "errors": 0,
+        "missingUsage": 0,
+        "complete": false,
+        "webSearchRequests": null,
+        "webFetchRequests": null,
+        "inputTokens": null,
+        "outputTokens": null,
+        "totalTokens": null,
+        "cacheReadTokens": null,
+        "cacheWriteTokens": null,
+        "reasoningTokens": null
+      }
+    }
+  },
+  "pairedQueries": []
+}

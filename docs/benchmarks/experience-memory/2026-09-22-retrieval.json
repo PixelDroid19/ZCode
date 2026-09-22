@@ -1,0 +1,245 @@
+{
+  "type": "retrieval-component-only",
+  "createdAt": "2026-09-22T18:21:12.704Z",
+  "sourceSha256": "9959401f9cfe5b5818d0425b5ed628973f6e0211d27fef6acbabfca092bef71c",
+  "commit": "41cabf884509f59d87762b55e99018492babe4a5",
+  "runtime": {
+    "node": "v24.14.0",
+    "platform": "linux",
+    "architecture": "x64"
+  },
+  "corpus": {
+    "targets": 8,
+    "distractors": 1000,
+    "otherRecords": 3
+  },
+  "seedMs": 195.74136900000002,
+  "semantics": {
+    "latestOnly": true,
+    "projectIsolation": true,
+    "userPortable": true
+  },
+  "summary": {
+    "keyword": {
+      "hitsAt6": 8,
+      "queries": 8,
+      "mrrAt6": 1
+    },
+    "paraphrase": {
+      "hitsAt6": 3,
+      "queries": 8,
+      "mrrAt6": 0.375
+    },
+    "crossLanguage": {
+      "hitsAt6": 2,
+      "queries": 8,
+      "mrrAt6": 0.25
+    }
+  },
+  "warmLatency": {
+    "queries": 480,
+    "p50Ms": 0.15308100000004288,
+    "p95Ms": 0.26526300000000447,
+    "maxMs": 0.3981350000000248
+  },
+  "results": [
+    {
+      "topic": "sqlite_writer",
+      "category": "keyword",
+      "query": "SQLite database is locked busy_timeout",
+      "rank": 1,
+      "milliseconds": 0.8902279999999791,
+      "returnedTopics": ["sqlite_writer"]
+    },
+    {
+      "topic": "sqlite_writer",
+      "category": "paraphrase",
+      "query": "El almacén local rechaza modificaciones concurrentes; ¿qué hicimos para que los escritores se turnaran?",
+      "rank": null,
+      "milliseconds": 0.21012899999993806,
+      "returnedTopics": ["windows_paths"]
+    },
+    {
+      "topic": "sqlite_writer",
+      "category": "crossLanguage",
+      "query": "How did we fix competing writers locking the embedded database?",
+      "rank": 1,
+      "milliseconds": 0.18782599999997274,
+      "returnedTopics": ["sqlite_writer"]
+    },
+    {
+      "topic": "oauth_cookie",
+      "category": "keyword",
+      "query": "OAuth callback cookie SameSite",
+      "rank": 1,
+      "milliseconds": 0.1457470000000285,
+      "returnedTopics": ["oauth_cookie"]
+    },
+    {
+      "topic": "oauth_cookie",
+      "category": "paraphrase",
+      "query": "Al volver del proveedor de identidad se perdía el acceso; ¿cómo conservamos la autenticación entre dominios?",
+      "rank": 1,
+      "milliseconds": 0.2295050000000174,
+      "returnedTopics": ["oauth_cookie", "stream_utf8", "sqlite_writer", "timezone_day"]
+    },
+    {
+      "topic": "oauth_cookie",
+      "category": "crossLanguage",
+      "query": "Why did sign-in forget the login after returning from an identity provider?",
+      "rank": null,
+      "milliseconds": 0.11727199999995719,
+      "returnedTopics": []
+    },
+    {
+      "topic": "watcher_inotify",
+      "category": "keyword",
+      "query": "ENOSPC inotify watcher Linux",
+      "rank": 1,
+      "milliseconds": 0.12578799999994317,
+      "returnedTopics": ["watcher_inotify"]
+    },
+    {
+      "topic": "watcher_inotify",
+      "category": "paraphrase",
+      "query": "El observador dejó de detectar ediciones al agotar los recursos del kernel; ¿qué directorios dejamos fuera?",
+      "rank": null,
+      "milliseconds": 0.23368300000004183,
+      "returnedTopics": ["windows_paths", "sqlite_writer", "oauth_cookie"]
+    },
+    {
+      "topic": "watcher_inotify",
+      "category": "crossLanguage",
+      "query": "What folders did we exclude when file watching exhausted kernel resources?",
+      "rank": null,
+      "milliseconds": 0.12091999999995551,
+      "returnedTopics": []
+    },
+    {
+      "topic": "stream_utf8",
+      "category": "keyword",
+      "query": "UTF-8 chunks SSE TextDecoder",
+      "rank": 1,
+      "milliseconds": 0.11564899999996214,
+      "returnedTopics": ["stream_utf8"]
+    },
+    {
+      "topic": "stream_utf8",
+      "category": "paraphrase",
+      "query": "Las letras acentuadas llegaban rotas cuando sus bytes venían en paquetes distintos; ¿cómo evitamos perder el fragmento pendiente?",
+      "rank": 1,
+      "milliseconds": 0.27263700000003155,
+      "returnedTopics": ["stream_utf8", "lease_owner", "pagination_cursor"]
+    },
+    {
+      "topic": "stream_utf8",
+      "category": "crossLanguage",
+      "query": "How did we preserve a multibyte character split across network packets?",
+      "rank": null,
+      "milliseconds": 0.19862700000010136,
+      "returnedTopics": ["portable-style"]
+    },
+    {
+      "topic": "lease_owner",
+      "category": "keyword",
+      "query": "lease ownerId fencingToken tarea",
+      "rank": 1,
+      "milliseconds": 0.1140060000000176,
+      "returnedTopics": ["lease_owner"]
+    },
+    {
+      "topic": "lease_owner",
+      "category": "paraphrase",
+      "query": "Un ejecutor que ya había perdido la concesión seguía marcando el trabajo como terminado; ¿qué verificamos al cerrar?",
+      "rank": null,
+      "milliseconds": 0.25026500000001306,
+      "returnedTopics": ["windows_paths", "sqlite_writer", "oauth_cookie"]
+    },
+    {
+      "topic": "lease_owner",
+      "category": "crossLanguage",
+      "query": "How did we stop a stale worker from finalizing a job it no longer owned?",
+      "rank": null,
+      "milliseconds": 0.12361399999997502,
+      "returnedTopics": []
+    },
+    {
+      "topic": "windows_paths",
+      "category": "keyword",
+      "query": "Windows rutas espacios execFile",
+      "rank": 1,
+      "milliseconds": 0.10914700000000721,
+      "returnedTopics": ["windows_paths"]
+    },
+    {
+      "topic": "windows_paths",
+      "category": "paraphrase",
+      "query": "La aplicación no arrancaba desde una carpeta cuyo nombre tenía blancos; ¿cómo pasamos los parámetros sin partirlos?",
+      "rank": null,
+      "milliseconds": 0.2508659999999736,
+      "returnedTopics": ["oauth_cookie", "timezone_day"]
+    },
+    {
+      "topic": "windows_paths",
+      "category": "crossLanguage",
+      "query": "How did we launch a program from a directory name containing whitespace?",
+      "rank": null,
+      "milliseconds": 0.1123929999999973,
+      "returnedTopics": []
+    },
+    {
+      "topic": "timezone_day",
+      "category": "keyword",
+      "query": "fecha YYYY-MM-DD UTC Bogotá",
+      "rank": 1,
+      "milliseconds": 0.14379200000007586,
+      "returnedTopics": ["timezone_day", "pagination_cursor"]
+    },
+    {
+      "topic": "timezone_day",
+      "category": "paraphrase",
+      "query": "El calendario mostraba la jornada previa por convertir una fecha sin hora; ¿qué representación mantuvimos?",
+      "rank": 1,
+      "milliseconds": 0.21586999999999534,
+      "returnedTopics": ["timezone_day", "windows_paths", "oauth_cookie", "pagination_cursor"]
+    },
+    {
+      "topic": "timezone_day",
+      "category": "crossLanguage",
+      "query": "Why did a date-only calendar value shift to the previous day?",
+      "rank": 1,
+      "milliseconds": 0.20272399999998925,
+      "returnedTopics": ["timezone_day"]
+    },
+    {
+      "topic": "pagination_cursor",
+      "category": "keyword",
+      "query": "paginación timestamp cursor createdAt",
+      "rank": 1,
+      "milliseconds": 0.11386600000003,
+      "returnedTopics": ["pagination_cursor"]
+    },
+    {
+      "topic": "pagination_cursor",
+      "category": "paraphrase",
+      "query": "Al pedir el siguiente bloque faltaban elementos empatados en el tiempo; ¿qué segundo criterio añadimos al orden?",
+      "rank": null,
+      "milliseconds": 0.2472490000000107,
+      "returnedTopics": ["windows_paths", "sqlite_writer", "oauth_cookie"]
+    },
+    {
+      "topic": "pagination_cursor",
+      "category": "crossLanguage",
+      "query": "How did we avoid missing items tied on time when fetching the next page?",
+      "rank": null,
+      "milliseconds": 0.14070700000002034,
+      "returnedTopics": []
+    }
+  ],
+  "limitations": [
+    "Manually seeded data: does not measure automatic learning or agent utility",
+    "No LLM calls or provider token measurements",
+    "Small synthetic corpus; distractors are repetitive",
+    "Warm latency measures search only, excluding model, runtime and database-open time"
+  ]
+}
