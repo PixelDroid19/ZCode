@@ -52,6 +52,7 @@ interface MentionPanelProps {
   selectedIndex: number;
   hasActiveQuery: boolean;
   onSelect: (index: number) => void;
+  onSelectItem?: (id: string) => void;
 }
 
 const OPTION_ROW_HEIGHT = 34;
@@ -73,6 +74,7 @@ export function MentionPanel({
   selectedIndex,
   hasActiveQuery,
   onSelect,
+  onSelectItem,
   trigger,
 }: MentionPanelProps) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -227,6 +229,7 @@ export function MentionPanel({
                       isSelected={row.flatOptionIndex === selectedIndex}
                       isHovered={row.flatOptionIndex === hoveredOptionIndex}
                       onSelect={onSelect}
+                      onSelectItem={onSelectItem}
                       onHover={setHoveredOptionIndex}
                     />
                   )}
@@ -316,12 +319,14 @@ function OptionRow({
   isSelected,
   isHovered,
   onSelect,
+  onSelectItem,
   onHover,
 }: {
   row: Extract<MentionPanelVirtualRow<MentionPanelOption>, { kind: "option" }>;
   isSelected: boolean;
   isHovered: boolean;
   onSelect: (index: number) => void;
+  onSelectItem?: (id: string) => void;
   onHover: (index: number | null) => void;
 }) {
   const { option, flatOptionIndex } = row;
@@ -357,7 +362,11 @@ function OptionRow({
           if (isDisabled) {
             return;
           }
-          onSelect(flatOptionIndex);
+          if (onSelectItem) {
+            onSelectItem(option.id);
+          } else {
+            onSelect(flatOptionIndex);
+          }
         }}
         onMouseEnter={() => onHover(isDisabled ? null : flatOptionIndex)}
       >

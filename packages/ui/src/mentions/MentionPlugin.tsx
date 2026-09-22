@@ -1,5 +1,13 @@
 /* eslint-disable max-lines */
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ZCodeProvider } from "@zcode/shared";
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { createPortal } from "react-dom";
@@ -67,6 +75,11 @@ interface MentionPluginProps {
   onWhiteboardMentionSelected?: (boardId: string) => void | Promise<void>;
 }
 
+interface MentionSelection {
+  signature: string | null;
+  itemId: string | null;
+}
+
 function getWrappedMentionIndex(currentIndex: number, delta: number, itemCount: number): number {
   if (itemCount <= 0) {
     return 0;
@@ -119,6 +132,25 @@ function coerceEnabledMentionIndex(
   return firstEnabledIndex >= 0 ? firstEnabledIndex : boundedIndex;
 }
 
+function getNextEnabledMentionSelection(
+  selection: MentionSelection,
+  activeSignature: string | null,
+  delta: number,
+  items: ReadonlyArray<MentionItem>,
+): MentionSelection {
+  const selectedItemIndex =
+    selection.signature === activeSignature
+      ? items.findIndex((item) => item.id === selection.itemId && !item.disabled)
+      : -1;
+  const currentIndex = coerceEnabledMentionIndex(selectedItemIndex, items);
+  const nextIndex = getNextEnabledMentionIndex(currentIndex, delta, items);
+  const nextItem = items[nextIndex];
+  return {
+    signature: activeSignature,
+    itemId: nextItem && !nextItem.disabled ? nextItem.id : null,
+  };
+}
+
 /**
  * IME 组合期间（拼音未上屏）是否冻结 @ 面板重算：中间态字母会被当作 query 逐字过滤一轮，
  * 面板闪烁且中间态结果错误；composition 提交后 Lexical 会再派发一次 update 完成重算。
@@ -141,9 +173,8 @@ export function MentionPlugin({
   const [editor] = useLexicalComposerContext();
   const { intl } = useZCodeIntl();
   const [activeTrigger, setActiveTrigger] = useState<ActivePromptInputTrigger | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selection, setSelection] = useState<MentionSelection>({ signature: null, itemId: null });
   const dismissedSignatureRef = useRef<string | null>(null);
-  const activeSignatureRef = useRef<string | null>(null);
   const activeTokenRef = useRef<ActivePromptInputTokenSnapshot | null>(null);
   const activeQuery = activeTrigger?.query ?? "";
   // 候选过滤会在渲染线程扫描大型 workspace；输入框与搜索共用同一个 query
@@ -298,6 +329,28 @@ export function MentionPlugin({
   ]);
 
   const flatItems = useMemo(() => panelGroups.flatMap((group) => group.items), [panelGroups]);
+  // 候选列表可在 Picker 打开时插入、重排或禁用条目；索引只是当前列表的位置，
+  // 不能充当选中项身份。用稳定 id 派生当前位置，首帧就能回退到当前首个可选项。
+  const selectedIndex = useMemo(() => {
+    const selectedItemIndex =
+      selection.signature === activeSignature
+        ? flatItems.findIndex((item) => item.id === selection.itemId && !item.disabled)
+        : -1;
+    return coerceEnabledMentionIndex(selectedItemIndex, flatItems);
+  }, [activeSignature, flatItems, selection]);
+  const selectedCandidate = flatItems[selectedIndex];
+  const selectedItemId =
+    selectedCandidate && !selectedCandidate.disabled ? selectedCandidate.id : null;
+  const pickerStateRef = useRef({
+    activeSignature,
+    flatItems,
+    selectedItemId,
+  });
+  // Lexical command 注册在 effect 中更新。提交后再发布快照，避免并发渲染中的候选提前
+  // 泄漏给当前屏幕；布局 effect 在浏览器绘制和下一次输入前完成更新。
+  useLayoutEffect(() => {
+    pickerStateRef.current = { activeSignature, flatItems, selectedItemId };
+  }, [activeSignature, flatItems, selectedItemId]);
 
   const panelSections = useMemo<MentionPanelSection[]>(
     () =>
@@ -358,16 +411,12 @@ export function MentionPlugin({
   );
 
   useEffect(() => {
-    activeSignatureRef.current = activeSignature;
-  }, [activeSignature]);
-
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [activeSignature]);
-
-  useEffect(() => {
-    setSelectedIndex((current) => coerceEnabledMentionIndex(current, flatItems));
-  }, [flatItems]);
+    setSelection((current) =>
+      current.signature === activeSignature && current.itemId === selectedItemId
+        ? current
+        : { signature: activeSignature, itemId: selectedItemId },
+    );
+  }, [activeSignature, selectedItemId]);
 
   useEffect(() => {
     if (!disabled) {
@@ -375,7 +424,7 @@ export function MentionPlugin({
     }
 
     setActiveTrigger(null);
-    setSelectedIndex(0);
+    setSelection({ signature: null, itemId: null });
     activeTokenRef.current = null;
   }, [disabled]);
 
@@ -498,7 +547,7 @@ export function MentionPlugin({
         dismissedSignatureRef.current = null;
         activeTokenRef.current = null;
         setActiveTrigger(null);
-        setSelectedIndex(0);
+        setSelection({ signature: null, itemId: null });
         void onWhiteboardMentionSelected(item.value);
         requestAnimationFrame(() => {
           editor.focus();
@@ -564,7 +613,7 @@ export function MentionPlugin({
       dismissedSignatureRef.current = null;
       activeTokenRef.current = null;
       setActiveTrigger(null);
-      setSelectedIndex(0);
+      setSelection({ signature: null, itemId: null });
       requestAnimationFrame(() => {
         editor.focus();
       });
@@ -573,11 +622,12 @@ export function MentionPlugin({
   );
 
   const selectOption = useCallback(
-    (index: number) => {
-      const nextItem = flatItems[index];
-      if (!nextItem) {
+    (itemId: string | null) => {
+      if (!itemId) {
         return false;
       }
+      const nextItem = pickerStateRef.current.flatItems.find((item) => item.id === itemId);
+      if (!nextItem) return false;
       // 禁选项（同名冲突 Plugin）不可插入：键盘 Enter/Tab 与鼠标点击都走这里统一拒绝。
       if (nextItem.disabled) {
         return false;
@@ -586,7 +636,7 @@ export function MentionPlugin({
       insertMentionItem(nextItem);
       return true;
     },
-    [flatItems, insertMentionItem],
+    [insertMentionItem],
   );
 
   useEffect(() => {
@@ -597,13 +647,16 @@ export function MentionPlugin({
     const unregisterDown = editor.registerCommand(
       KEY_ARROW_DOWN_COMMAND,
       (event) => {
-        if (flatItems.length === 0) {
+        const current = pickerStateRef.current;
+        if (current.flatItems.length === 0) {
           return false;
         }
 
         event?.preventDefault();
         event?.stopPropagation();
-        setSelectedIndex((prev) => getNextEnabledMentionIndex(prev, 1, flatItems));
+        setSelection((selection) =>
+          getNextEnabledMentionSelection(selection, current.activeSignature, 1, current.flatItems),
+        );
         return true;
       },
       COMMAND_PRIORITY_CRITICAL,
@@ -612,13 +665,16 @@ export function MentionPlugin({
     const unregisterUp = editor.registerCommand(
       KEY_ARROW_UP_COMMAND,
       (event) => {
-        if (flatItems.length === 0) {
+        const current = pickerStateRef.current;
+        if (current.flatItems.length === 0) {
           return false;
         }
 
         event?.preventDefault();
         event?.stopPropagation();
-        setSelectedIndex((prev) => getNextEnabledMentionIndex(prev, -1, flatItems));
+        setSelection((selection) =>
+          getNextEnabledMentionSelection(selection, current.activeSignature, -1, current.flatItems),
+        );
         return true;
       },
       COMMAND_PRIORITY_CRITICAL,
@@ -627,7 +683,7 @@ export function MentionPlugin({
     const unregisterEnter = editor.registerCommand(
       KEY_ENTER_COMMAND,
       (event) => {
-        if (!selectOption(selectedIndex)) {
+        if (!selectOption(pickerStateRef.current.selectedItemId)) {
           return false;
         }
 
@@ -641,7 +697,7 @@ export function MentionPlugin({
     const unregisterTab = editor.registerCommand(
       KEY_TAB_COMMAND,
       (event) => {
-        if (!selectOption(selectedIndex)) {
+        if (!selectOption(pickerStateRef.current.selectedItemId)) {
           return false;
         }
 
@@ -658,23 +714,22 @@ export function MentionPlugin({
         event?.preventDefault();
         event?.stopPropagation();
 
-        dismissedSignatureRef.current = activeSignatureRef.current;
+        dismissedSignatureRef.current = pickerStateRef.current.activeSignature;
         setActiveTrigger(null);
-        setSelectedIndex(0);
+        setSelection({ signature: null, itemId: null });
         return true;
       },
       COMMAND_PRIORITY_CRITICAL,
     );
 
-    // 调试说明：先注释掉 blur 自动关闭逻辑，方便观察 panel 在焦点切换时的实际行为。
-    // 当前只移除“失焦即消失”这一路径，Esc / 选中项 / trigger 失效等关闭逻辑仍然保留。
+    // 失焦时清除 mention 触发状态以关闭面板；返回 false 让编辑器的其他 blur 处理器继续运行。
     const unregisterBlur = editor.registerCommand(
       BLUR_COMMAND,
       () => {
         dismissedSignatureRef.current = null;
         activeTokenRef.current = null;
         setActiveTrigger(null);
-        setSelectedIndex(0);
+        setSelection({ signature: null, itemId: null });
         return false;
       },
       COMMAND_PRIORITY_LOW,
@@ -715,7 +770,8 @@ export function MentionPlugin({
       emptyText={panelEmptyText}
       selectedIndex={selectedIndex}
       hasActiveQuery={hasActiveQuery}
-      onSelect={selectOption}
+      onSelect={(index) => selectOption(pickerStateRef.current.flatItems[index]?.id ?? null)}
+      onSelectItem={selectOption}
     />,
     container,
   );

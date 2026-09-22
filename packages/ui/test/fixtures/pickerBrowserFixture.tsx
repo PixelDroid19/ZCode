@@ -47,6 +47,7 @@ interface Controller {
   pending: Map<string, CatalogRequest<unknown>>;
   nextBehavior: Record<CatalogKind, NextBehavior>;
   capabilityListeners: Set<(event: unknown) => void>;
+  sessionsIndexListeners: Set<(event: unknown) => void>;
   services: IServiceAccessor;
 }
 
@@ -112,6 +113,7 @@ function createController(label: string, attachmentId: string): Controller {
     pending: new Map(),
     nextBehavior: { skills: "resolve", plugins: "resolve" },
     capabilityListeners: new Set(),
+    sessionsIndexListeners: new Set(),
     services: null as unknown as IServiceAccessor,
   };
 
@@ -140,6 +142,37 @@ function createController(label: string, attachmentId: string): Controller {
     onDynamicCapabilitiesChanged: () => (listener: (event: unknown) => void) => {
       controller.capabilityListeners.add(listener);
       return { dispose: () => controller.capabilityListeners.delete(listener) };
+    },
+    helloConversationV4: async () => ({
+      kind: "hello",
+      protocolVersion: 3,
+      connectionId: `fixture-${controller.attachmentId}`,
+      clientMode: "desktop-continuous",
+      deliveryProfile: "continuous",
+      serverTime: Date.now(),
+      capabilities: {
+        nativeDialogs: false,
+        localTerminal: false,
+        binaryFrames: false,
+        compression: "none",
+      },
+      auth: {},
+    }),
+    initializeConversationV4: async () => {},
+    subscribeSessionsIndexV4: async () => ({
+      ack: {
+        subscriptionId: `fixture-sessions-${controller.attachmentId}`,
+        mode: "snapshot",
+        logEpoch: "fixture-epoch",
+      },
+    }),
+    resyncSessionsIndexV4: async () => ({
+      subscriptionId: `fixture-sessions-${controller.attachmentId}`,
+    }),
+    unsubscribeSessionsIndexV4: async () => {},
+    onDynamicSessionsIndexFrame: () => (listener: (event: unknown) => void) => {
+      controller.sessionsIndexListeners.add(listener);
+      return { dispose: () => controller.sessionsIndexListeners.delete(listener) };
     },
   };
   const pluginManagementService = {
