@@ -250,7 +250,8 @@ export class RuntimeCapabilityController {
         return;
       }
       if (!prepared) {
-        if (this.status.status === "loading") {
+        // 修复：恢复原始文件后可能没有 watcher 提示；成功读取即应清除旧错误，保留已发布版本。
+        if (this.status.status !== "ready") {
           this.setStatus({
             ...(this.current?.revision ? { revision: this.current.revision } : {}),
             status: "ready",
