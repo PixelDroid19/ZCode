@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- ZCode Protocol 的 session/workspace 方法共享同一个 server context 与 snapshot helpers，迁移期先集中维护。 */
 import { observeSessionDebug } from "./session-debug.js";
+import { notifySessionCapabilitiesChanged } from "./capabilities-notification.js";
 import {
   TASK_LIST_SESSION_TYPES,
   isTaskListSessionType,
@@ -3324,6 +3325,9 @@ async function createRecord(
     env: context.deps.env,
     eventStore,
     resume,
+    mcpServersSource:
+      params.mcpServersSource ?? (params.mcpServers === undefined ? "directory" : "session"),
+    mcpServersBase: protocolMcpServersToRuntimeMcpConfig(params.mcpServersBase)?.servers,
     runtimeConfig: {
       mode: "mode" in params ? params.mode : undefined,
       modelSelection: "model" in params ? toRuntimeModelSelection(initialModel) : undefined,
@@ -3417,8 +3421,12 @@ async function createRecord(
   const unsubscribeSessionEvents = app.runtime.subscribeEvents({
     onSessionEvent: (event) => onSessionEvent(context, record, event),
   });
+  const unsubscribeCapabilities = app.subscribeCapabilities((status) => {
+    notifySessionCapabilitiesChanged(context, { sessionId, status });
+  });
   record.unsubscribe = () => {
     unsubscribeSessionEvents();
+    unsubscribeCapabilities();
   };
   // 绑定归属会话，供 automation-port 读取本会话实时 model/mode/thought。
   ownSessionRecord = record;

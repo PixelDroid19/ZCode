@@ -102,6 +102,17 @@ export async function runRegularTurnLoop(
     }
     throwIfTurnAborted(state.turnAbortSignal);
 
+    const refreshedEntries = await this.refreshCapabilitiesAtModelBoundary({
+      abortSignal: state.turnAbortSignal,
+      model: state.model,
+      traceContext: state.turnTraceContext,
+      turnRequestEntries: state.turnRequestState.entries,
+    });
+    if (refreshedEntries) {
+      state.turnRequestState.entries = refreshedEntries;
+    }
+    throwIfTurnAborted(state.turnAbortSignal);
+
     const finishMcp = beginLocalTurnPreparation(state.turnTraceContext, "mcp");
     await this.initializeMcp(state.turnTraceContext);
     finishMcp();

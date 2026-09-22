@@ -338,6 +338,7 @@ export const zcodeProtocolNotifications = {
   mcpResourceSamples: "process/mcpResourceSamples",
   toolExecResource: "process/toolExecResource",
   pluginOperationProgress: "plugins/operationProgress",
+  sessionCapabilitiesChanged: "session/capabilities_changed",
   processResourceSample: "process/resourceSample",
 } as const;
 
@@ -651,6 +652,32 @@ export const zcodeProtocolMcpServerSchema = z.union([
     .strict(),
 ]);
 export type ZCodeProtocolMcpServer = z.infer<typeof zcodeProtocolMcpServerSchema>;
+
+/** Identifies whether a supplied MCP list is a fixed session override or a directory projection. */
+export const zcodeMcpServersSourceSchema = z.enum(["directory", "session"]);
+export type ZCodeMcpServersSource = z.infer<typeof zcodeMcpServersSourceSchema>;
+
+/**
+ * Directory projections must retain their raw source before host-only augmentation.
+ * A source without either list asks the runtime to discover the directory itself.
+ */
+export function hasValidMcpServersProvenance(input: {
+  mcpServers?: unknown;
+  mcpServersBase?: unknown;
+  mcpServersSource?: unknown;
+}): boolean {
+  if (input.mcpServersBase !== undefined && input.mcpServersSource !== "directory") {
+    return false;
+  }
+  return (
+    input.mcpServersSource !== "directory" ||
+    input.mcpServers === undefined ||
+    input.mcpServersBase !== undefined
+  );
+}
+
+export const ZCODE_MCP_SERVERS_PROVENANCE_ERROR =
+  "mcpServersBase requires mcpServersSource=directory; directory mcpServers requires mcpServersBase";
 
 export const zcodeMcpServerStatusKindSchema = z.enum([
   "connecting",
@@ -1566,6 +1593,8 @@ export const zcodeSessionCreateParamsSchema = z
     thoughtLevel: nonEmptyString.optional(),
     titleGenerationEnabled: z.boolean().optional(),
     mcpServers: z.array(zcodeProtocolMcpServerSchema).optional(),
+    mcpServersSource: zcodeMcpServersSourceSchema.optional(),
+    mcpServersBase: z.array(zcodeProtocolMcpServerSchema).optional(),
     toolAllowlist: z.array(nonEmptyString).optional(),
     toolDenylist: z.array(nonEmptyString).optional(),
     importedHistory: zcodeSessionImportHistorySchema.optional(),
@@ -1576,7 +1605,11 @@ export const zcodeSessionCreateParamsSchema = z
     // 模式——host 裁决后下发，缺省不下发 = 不注册工作流工具簇（fail-closed）。
     dynamicWorkflowEnabled: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine(hasValidMcpServersProvenance, {
+    message: ZCODE_MCP_SERVERS_PROVENANCE_ERROR,
+    path: ["mcpServersBase"],
+  });
 export type ZCodeSessionCreateParams = z.infer<typeof zcodeSessionCreateParamsSchema>;
 
 export const zcodeSessionResumeParamsSchema = z
@@ -1586,6 +1619,8 @@ export const zcodeSessionResumeParamsSchema = z
     // 旧 session 尚无 runtime/model_selection entry 时，由同 task 的索引元数据提供迁移 hint。
     thoughtLevel: nonEmptyString.optional(),
     mcpServers: z.array(zcodeProtocolMcpServerSchema).optional(),
+    mcpServersSource: zcodeMcpServersSourceSchema.optional(),
+    mcpServersBase: z.array(zcodeProtocolMcpServerSchema).optional(),
     // 冷恢复重建 runtime 时必须沿用 create 的工具面约束（否则会绕过 allow/deny，尤其 CUA 会话）。
     toolAllowlist: z.array(nonEmptyString).optional(),
     toolDenylist: z.array(nonEmptyString).optional(),
@@ -1594,7 +1629,11 @@ export const zcodeSessionResumeParamsSchema = z
     // 与 create 同语义；resume 不带会导致冷恢复丢工作流工具簇。
     dynamicWorkflowEnabled: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine(hasValidMcpServersProvenance, {
+    message: ZCODE_MCP_SERVERS_PROVENANCE_ERROR,
+    path: ["mcpServersBase"],
+  });
 export type ZCodeSessionResumeParams = z.infer<typeof zcodeSessionResumeParamsSchema>;
 
 export const zcodeSessionListParamsSchema = z
@@ -2634,10 +2673,33 @@ export const zcodePluginsReferenceCatalogParamsSchema = z
 export type ZCodePluginsReferenceCatalogParams = z.infer<
   typeof zcodePluginsReferenceCatalogParamsSchema
 >;
+
+/** Runtime-owned capability adoption state. Catalogs expose this only as a derived projection. */
+export const zcodeCapabilitiesStatusSchema = z
+  .object({
+    revision: nonEmptyString.optional(),
+    status: z.enum(["ready", "loading", "error"]),
+    error: nonEmptyString.optional(),
+  })
+  .strict();
+export type ZCodeCapabilitiesStatus = z.infer<typeof zcodeCapabilitiesStatusSchema>;
+
+/** Sideband notification emitted after a resident Session adopts (or rejects) capabilities. */
+export const zcodeSessionCapabilitiesChangedNotificationSchema = z
+  .object({
+    sessionId: nonEmptyString,
+    status: zcodeCapabilitiesStatusSchema,
+  })
+  .strict();
+export type ZCodeSessionCapabilitiesChangedNotification = z.infer<
+  typeof zcodeSessionCapabilitiesChangedNotificationSchema
+>;
+
 export const zcodePluginsReferenceCatalogResultSchema = z
   .object({
     authority: z.enum(["session", "workspace"]),
     plugins: z.array(zcodePluginReferenceCatalogEntrySchema),
+    capabilityStatus: zcodeCapabilitiesStatusSchema.optional(),
   })
   .strict();
 export type ZCodePluginsReferenceCatalogResult = z.infer<
@@ -2676,6 +2738,7 @@ export const zcodeSkillsReferenceCatalogResultSchema = z
   .object({
     authority: z.enum(["session", "workspace"]),
     skills: z.array(zcodeSkillReferenceCatalogEntrySchema),
+    capabilityStatus: zcodeCapabilitiesStatusSchema.optional(),
   })
   .strict();
 export type ZCodeSkillsReferenceCatalogResult = z.infer<

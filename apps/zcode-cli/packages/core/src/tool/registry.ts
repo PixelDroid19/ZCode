@@ -12,6 +12,8 @@ import type { ToolEntry, ToolMetadata } from "./types.js";
 export interface ToolRegistry {
   register(entry: ToolEntry, options?: ToolRegistryRegisterOptions): void;
   unregister(name: string): void;
+  /** Replaces the complete registry in one synchronous publication step. */
+  replaceAll?(entries: readonly ToolEntry[]): void;
   get(name: string): ToolEntry | undefined;
   has(name: string): boolean;
   list(): string[];
@@ -83,6 +85,29 @@ export class ToolRegistryImpl implements ToolRegistry {
         this.aliases.delete(alias);
       }
     }
+  }
+
+  replaceAll(entries: readonly ToolEntry[]): void {
+    const nextTools = new Map<string, ToolEntry>();
+    const nextAliases = new Map<string, string>();
+
+    for (const entry of entries) {
+      const name = entry.metadata.name;
+      if (!name) throw new Error("Tool entries require a name");
+      if (nextTools.has(name) || nextAliases.has(name)) {
+        throw new Error(`Duplicate tool identity: ${name}`);
+      }
+      nextTools.set(name, entry);
+      for (const alias of entry.aliases ?? []) {
+        if (!alias || alias === name || nextTools.has(alias) || nextAliases.has(alias)) {
+          throw new Error(`Duplicate tool identity: ${alias || name}`);
+        }
+        nextAliases.set(alias, name);
+      }
+    }
+
+    this.tools = nextTools;
+    this.aliases = nextAliases;
   }
 
   get(name: string): ToolEntry | undefined {

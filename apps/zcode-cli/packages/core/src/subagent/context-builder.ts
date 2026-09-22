@@ -17,6 +17,8 @@ import { buildSubagentCommonNotes, buildSubagentEnvironmentContext } from "./sys
 
 export interface SubagentContextBuilderConfig {
   agentPrompt: string;
+  /** Source-authored stable guidance that accompanies an inherited live capability snapshot. */
+  capabilityInstructions?: string;
   currentDate?: string;
   envInfo: EnvInfo;
   model?: Model;
@@ -127,6 +129,20 @@ function buildSubagentContextSections(config: SubagentContextBuilderConfig): Con
       // ZCode by design：后续 Subagent system block 统一自带双换行左边界。
       content: `\n\n${buildSubagentCommonNotes()}`,
     }),
+  );
+
+  if (config.capabilityInstructions?.trim()) {
+    sections.push(
+      createSubagentSection({
+        name: "Live capabilities",
+        source: "live_capabilities",
+        cacheHint: "stable",
+        content: `\n\n${config.capabilityInstructions.trim()}`,
+      }),
+    );
+  }
+
+  sections.push(
     createSubagentSection({
       name: "Subagent Environment",
       source: "subagent_environment",

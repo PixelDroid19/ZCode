@@ -215,6 +215,18 @@ function statusLines(props: SidebarProps): React.ReactNode[] {
       textLine(truncateDisplay(props.lastError, SIDEBAR_CONTENT_WIDTH), palette.danger, "error"),
     );
   }
+  if (props.mcpStatus?.capabilityReloadError !== undefined) {
+    lines.push(
+      textLine(
+        truncateDisplay(
+          copy.sidebar.status.capabilitiesReloadFailed(props.mcpStatus.capabilityReloadError),
+          SIDEBAR_CONTENT_WIDTH,
+        ),
+        palette.warning,
+        "capabilities-reload-error",
+      ),
+    );
+  }
   return lines;
 }
 

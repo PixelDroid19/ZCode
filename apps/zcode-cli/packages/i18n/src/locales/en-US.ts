@@ -232,6 +232,8 @@ Slash Commands:
         pending: "pending",
       },
       status: {
+        capabilitiesReloadFailed: (error) =>
+          error ? `Capabilities reload failed: ${error}` : "Capabilities reload failed.",
         last: "Last",
       },
       run: {

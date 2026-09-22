@@ -174,6 +174,7 @@ export interface TuiCopy {
       pending: string;
     };
     status: {
+      capabilitiesReloadFailed(error?: string): string;
       last: string;
     };
     run: {

@@ -249,7 +249,12 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
         : { modelRequestAdmission: modelActivity.admission }),
     });
     if (seed !== undefined) {
-      await seedActorSession(this.deps, { journaledSessionId: journaled, runtime, seed, sessionId });
+      await seedActorSession(this.deps, {
+        journaledSessionId: journaled,
+        runtime,
+        seed,
+        sessionId,
+      });
     }
     state = {
       ref,
@@ -396,7 +401,13 @@ class AgentRuntimeWorkflowDriver implements WorkflowDriver {
   private closeActorRuntime(state: SessionState): void {
     // Promise.resolve().then(...)：把同步抛出也归到同一条 warn 路径（最小 stub runtime 没有这个方法）。
     void Promise.resolve()
-      .then(() => state.runtime.closeBrowserSession())
+      .then(async () => {
+        try {
+          await state.runtime.closeBrowserSession();
+        } finally {
+          await state.runtime.disposeCapabilities?.();
+        }
+      })
       .catch((error: unknown) => {
         this.deps.logger?.warn?.("Dynamic workflow actor runtime close failed", {
           errorMessage: error instanceof Error ? error.message : String(error),

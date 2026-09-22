@@ -3,6 +3,7 @@ import type { AiSdkModelAdapter } from "@zcode/adapters/model";
 import type {
   AgentRuntime,
   AgentRuntimeConfig,
+  RuntimeCapabilitiesStatus,
   ExecuteTurnOptions,
   ExpertWorkflowCommandResult,
   ProviderRuntimeHeadersPort,
@@ -58,6 +59,7 @@ import type {
   InputHistoryStorePort,
   LoggerFactory,
   McpPort,
+  McpServerConfig,
   McpServerStatus,
   ModelSelection,
   PermissionBrokerPort,
@@ -126,6 +128,10 @@ export interface ZCodeAppOptions {
   version?: string;
   traceContext?: TraceContext;
   runtimeConfig?: ZCodeAppRuntimeConfigInput;
+  /** Explicit session maps are fixed; directory projections opt into live file resolution. */
+  mcpServersSource?: "directory" | "session";
+  /** Original directory values before host-only workspace/credential augmentation. */
+  mcpServersBase?: Record<string, McpServerConfig>;
   /**
    * stdio 协议模式的 agent 进程由 Electron host 拉起，模型服务需要看到 electron 来源。
    * 普通 CLI 不传，继续使用 cli 默认值。
@@ -385,11 +391,10 @@ export interface ZCodeApp {
   listPlugins(): Promise<PluginLoadOutcome>;
   setPluginEnabled(plugin: string, enabled: boolean): Promise<ZCodePluginSetResult>;
   uninstallPlugin(plugin: string): Promise<ZCodePluginUninstallResult>;
-  /**
-   * Session 冻结的 Plugin 身份 catalog。
-   * 在 App 创建时由 resolveStartupPlugins 结果构建一次，之后只读；
-   * `plugins/referenceCatalog` 带 sessionId 时以此为 session authority。
-   */
+  getCapabilitiesStatus(): RuntimeCapabilitiesStatus;
+  refreshCapabilities(): Promise<RuntimeCapabilitiesStatus>;
+  subscribeCapabilities(listener: (status: RuntimeCapabilitiesStatus) => void): () => void;
+  /** Session 已采用的 Plugin 身份目录；正在执行的 step 保持其原版本。 */
   getPluginReferenceCatalog(): PluginReferenceCatalog;
   /** 当前 Session 的 AgentRuntime Skill 发现快照；冷恢复重建 runtime 后重新发现。 */
   getSkillCatalog(): Promise<SkillLoadOutcome>;

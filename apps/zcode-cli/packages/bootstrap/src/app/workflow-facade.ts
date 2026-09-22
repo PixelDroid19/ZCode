@@ -83,6 +83,10 @@ export function createWorkflowFacade(deps: CreateWorkflowFacadeDeps): WorkflowFa
   const workflowAgentRunner: WorkflowAgentRunner = {
     run: async (request) => {
       await deps.prepareUserExecutionBoundary({ traceContext: request.traceContext });
+      await deps.runtime.refreshCapabilities({
+        traceContext: request.traceContext,
+        abortSignal: request.abortSignal,
+      });
       const workflowKind = request.workflowKind ?? builtInExpertWorkflowDefinition.kind;
       const childSessionId = createSessionId(`workflow_${request.activityId}`);
       const childTraceContext = createChildTraceContext(request.traceContext ?? deps.traceContext, {
@@ -130,6 +134,7 @@ export function createWorkflowFacade(deps: CreateWorkflowFacadeDeps): WorkflowFa
         };
       } finally {
         unsubscribe?.();
+        await childRuntime.disposeCapabilities();
       }
     },
   };
@@ -280,81 +285,90 @@ function createWorkflowChildRuntime(
     workflowKind: string;
   },
 ): AgentRuntime {
-  return new AgentRuntime(
-    options.childSessionId,
-    {
-      ...deps.runtimeConfig,
-      agentName: options.workflowKind === "expert" ? "zcode-expert" : "zcode-workflow",
-      mode: "yolo",
-      modelSelection: deps.runtime.getSessionModelSelection(),
-      parentSessionId: deps.sessionId,
-      taskType: "workflow_child",
-      workingDirectory: deps.workingDirectory,
-    },
-    {
-      agentTelemetry: deps.agentTelemetry,
-      agentTelemetryCausation: deps.agentTelemetry.captureCausation(),
-      // Workflow 在父工具返回后独立调度，不能伪装成父 Span 的同步 Child。
-      agentTelemetryCausationMode: "linked_root",
-      eventStore: createInMemorySessionEventStore(),
-      sessionStore: deps.sessionStore,
-      logger: deps.logger,
-      executionPort:
-        deps.appOptions.executionPort ??
-        createNodeExecutionAdapter({
-          onToolExecResource: deps.appOptions.onToolExecResource,
-          network: {
-            httpProxy: deps.configResult.config.network.httpProxy,
+  const capabilitySource = deps.runtime.createInheritedCapabilitySource({
+    inheritRuntimeConfig: true,
+  });
+  try {
+    return new AgentRuntime(
+      options.childSessionId,
+      {
+        ...deps.runtimeConfig,
+        agentName: options.workflowKind === "expert" ? "zcode-expert" : "zcode-workflow",
+        mode: "yolo",
+        modelSelection: deps.runtime.getSessionModelSelection(),
+        parentSessionId: deps.sessionId,
+        taskType: "workflow_child",
+        workingDirectory: deps.workingDirectory,
+      },
+      {
+        agentTelemetry: deps.agentTelemetry,
+        capabilitySource,
+        agentTelemetryCausation: deps.agentTelemetry.captureCausation(),
+        // Workflow 在父工具返回后独立调度，不能伪装成父 Span 的同步 Child。
+        agentTelemetryCausationMode: "linked_root",
+        eventStore: createInMemorySessionEventStore(),
+        sessionStore: deps.sessionStore,
+        logger: deps.logger,
+        executionPort:
+          deps.appOptions.executionPort ??
+          createNodeExecutionAdapter({
+            onToolExecResource: deps.appOptions.onToolExecResource,
+            network: {
+              httpProxy: deps.configResult.config.network.httpProxy,
+              noProxy: deps.configResult.config.network.noProxy,
+              caCertFile: deps.configResult.config.network.caCertFile,
+            },
+            outputRootDir: join(deps.storageRoot, "cli", "exec"),
+            processEnv: deps.appOptions.env ?? process.env,
+          }),
+        fileSystemPort: deps.appOptions.fileSystemPort ?? createNodeFileSystemAdapter(),
+        httpClientPort:
+          deps.appOptions.httpClientPort ??
+          createNodeWebFetchHttpClientAdapter({
+            env: deps.appOptions.env ?? process.env,
+            timeoutMs: deps.configResult.config.network.timeout,
+            proxyUrl: deps.configResult.config.network.httpProxy,
             noProxy: deps.configResult.config.network.noProxy,
             caCertFile: deps.configResult.config.network.caCertFile,
-          },
-          outputRootDir: join(deps.storageRoot, "cli", "exec"),
-          processEnv: deps.appOptions.env ?? process.env,
+          }),
+        imageProcessorPort: deps.imageProcessorPort,
+        pdfDocumentPort: deps.pdfDocumentPort,
+        artifactStore: deps.artifactStore,
+        contextSourcePort:
+          deps.appOptions.contextSourcePort ??
+          createNodeContextSourceAdapter({ env: deps.appOptions.env }),
+        skillPort:
+          deps.configResult.config.features.skill && deps.configResult.config.skills.enabled
+            ? (deps.appOptions.skillPort ??
+              createNodeSkillAdapter({
+                extraRoots: deps.configResult.config.skills.roots,
+                // workflow 子 agent 复用同一套 skill 发现逻辑，也必须继承主配置里的禁用路径。
+                disabledPaths: collectDisabledPaths(deps.configResult.config.skillOverrides),
+              }))
+            : undefined,
+        mcpPort: deps.mcpPort,
+        eventSink: deps.eventSink,
+        modelFactory: deps.modelFactory,
+        resolveEffectiveModelSelection: deps.appOptions.resolveEffectiveModelSelection,
+        // 对外交互端口由父 runtime 派生（permissionBroker + providerRuntimeHeadersPort）：
+        // 子会话不是协议客户端认识的身份，直接透传 appOptions 的端口会让反向请求发到一个
+        // 客户端找不到的 session 上、response 永不回来。
+        ...deps.runtime.createChildClientPorts({
+          agentId: options.childSessionId,
+          agentType: options.workflowKind === "expert" ? "zcode-expert" : "zcode-workflow",
+          childSessionId: options.childSessionId,
+          description: `${options.workflowKind} workflow agent`,
+          ...(options.childTraceContext.turnId === undefined
+            ? {}
+            : { parentTurnId: options.childTraceContext.turnId }),
         }),
-      fileSystemPort: deps.appOptions.fileSystemPort ?? createNodeFileSystemAdapter(),
-      httpClientPort:
-        deps.appOptions.httpClientPort ??
-        createNodeWebFetchHttpClientAdapter({
-          env: deps.appOptions.env ?? process.env,
-          timeoutMs: deps.configResult.config.network.timeout,
-          proxyUrl: deps.configResult.config.network.httpProxy,
-          noProxy: deps.configResult.config.network.noProxy,
-          caCertFile: deps.configResult.config.network.caCertFile,
-        }),
-      imageProcessorPort: deps.imageProcessorPort,
-      pdfDocumentPort: deps.pdfDocumentPort,
-      artifactStore: deps.artifactStore,
-      contextSourcePort:
-        deps.appOptions.contextSourcePort ??
-        createNodeContextSourceAdapter({ env: deps.appOptions.env }),
-      skillPort:
-        deps.configResult.config.features.skill && deps.configResult.config.skills.enabled
-          ? (deps.appOptions.skillPort ??
-            createNodeSkillAdapter({
-              extraRoots: deps.configResult.config.skills.roots,
-              // workflow 子 agent 复用同一套 skill 发现逻辑，也必须继承主配置里的禁用路径。
-              disabledPaths: collectDisabledPaths(deps.configResult.config.skillOverrides),
-            }))
-          : undefined,
-      mcpPort: deps.mcpPort,
-      eventSink: deps.eventSink,
-      modelFactory: deps.modelFactory,
-      resolveEffectiveModelSelection: deps.appOptions.resolveEffectiveModelSelection,
-      // 对外交互端口由父 runtime 派生（permissionBroker + providerRuntimeHeadersPort）：
-      // 子会话不是协议客户端认识的身份，直接透传 appOptions 的端口会让反向请求发到一个
-      // 客户端找不到的 session 上、response 永不回来。
-      ...deps.runtime.createChildClientPorts({
-        agentId: options.childSessionId,
-        agentType: options.workflowKind === "expert" ? "zcode-expert" : "zcode-workflow",
-        childSessionId: options.childSessionId,
-        description: `${options.workflowKind} workflow agent`,
-        ...(options.childTraceContext.turnId === undefined
-          ? {}
-          : { parentTurnId: options.childTraceContext.turnId }),
-      }),
-      permissionService: deps.permissionService,
-      appVersion: deps.appVersion,
-      traceContext: options.childTraceContext,
-    },
-  );
+        permissionService: deps.permissionService,
+        appVersion: deps.appVersion,
+        traceContext: options.childTraceContext,
+      },
+    );
+  } catch (error) {
+    void capabilitySource?.dispose?.();
+    throw error;
+  }
 }

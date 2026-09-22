@@ -834,6 +834,12 @@ export function createZCodeAgentConnectionScope(
         base.onDynamicConversationFrame(params),
       );
     },
+    onDynamicCapabilitiesChanged(params) {
+      assertOpen();
+      // Unlike V4 frame ownership, this sideband event has no subscription command. Preserve
+      // the exact routed target so remote attachments cannot receive one another's refreshes.
+      return base.onDynamicCapabilitiesChanged(params);
+    },
     onDynamicLocalTtftFacts(params) {
       assertOpen();
       if (

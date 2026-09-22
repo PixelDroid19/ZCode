@@ -21,6 +21,16 @@ import { notifyExternalChildSessionEvent } from "./config.js";
 import { createChildClientPorts } from "./config.js";
 import { getContextBuilder } from "./config.js";
 import { getPendingPermissionRequests } from "./config.js";
+import {
+  acquireCapabilitiesLease,
+  createInheritedCapabilitySource,
+  disposeCapabilities,
+  getCapabilitiesStatus,
+  getPluginReferenceCatalog,
+  refreshCapabilities,
+  refreshCapabilitiesAtModelBoundary,
+  subscribeCapabilities,
+} from "./live-capabilities.js";
 import { recordUserInputAutoResolutionUpdate } from "./interaction-auto-resolution.js";
 import { recordDynamicWorkflowRunProgress } from "./dynamic-workflow-run-progress.js";
 import { trackResumedDynamicWorkflowRun } from "./dynamic-workflow-run-track.js";
@@ -227,6 +237,14 @@ export function installAgentRuntimeMethods(ctor: AgentRuntimeConstructor): void 
   proto.createChildClientPorts = createChildClientPorts;
   proto.getContextBuilder = getContextBuilder;
   proto.getPendingPermissionRequests = getPendingPermissionRequests;
+  proto.getCapabilitiesStatus = getCapabilitiesStatus;
+  proto.refreshCapabilities = refreshCapabilities;
+  proto.subscribeCapabilities = subscribeCapabilities;
+  proto.getPluginReferenceCatalog = getPluginReferenceCatalog;
+  proto.createInheritedCapabilitySource = createInheritedCapabilitySource;
+  proto.disposeCapabilities = disposeCapabilities;
+  proto.refreshCapabilitiesAtModelBoundary = refreshCapabilitiesAtModelBoundary;
+  proto.acquireCapabilitiesLease = acquireCapabilitiesLease;
   proto.recordUserInputAutoResolutionUpdate = recordUserInputAutoResolutionUpdate;
   proto.recordDynamicWorkflowRunProgress = recordDynamicWorkflowRunProgress;
   proto.trackResumedDynamicWorkflowRun = trackResumedDynamicWorkflowRun;

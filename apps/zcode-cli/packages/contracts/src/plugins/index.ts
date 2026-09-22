@@ -7,6 +7,8 @@ import type { ExecutionContext, TraceContext } from "../tracing/tracer.js";
 export const ZCODE_OFFICIAL_PLUGIN_MARKETPLACE = "zcode-plugins-official";
 export const ZCODE_INLINE_PLUGIN_MARKETPLACE = "inline";
 export const ZCODE_PLUGIN_HOST_COMMAND = "__zcode-plugin-host";
+/** Isolated subprocess entry for approved live tool scripts in SEA distributions. */
+export const ZCODE_LIVE_TOOL_HOST_COMMAND = "__zcode-live-tool-host";
 /**
  * 隐藏子命令：dynamic workflow 的沙箱子进程入口（`__zcode-dwf-child <entry path>`；argv 末位是
  * harness 写好的入口文件路径，payload 不过命令行）。

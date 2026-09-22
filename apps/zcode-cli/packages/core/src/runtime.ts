@@ -31,6 +31,16 @@ export type {
   WorkspaceRewindRestoredFile,
   WorkspaceRewindResult,
 } from "./runtime/types.js";
+export type {
+  PreparedRuntimeCapabilities,
+  PreparedRuntimeCapabilitiesConfig,
+  PreparedRuntimeMcpCapabilities,
+  InheritedRuntimeCapabilities,
+  InheritedRuntimeCapabilitySourceOptions,
+  RuntimeCapabilitiesStatus,
+  RuntimeCapabilitySource,
+  RuntimeCapabilitySourcePrepareInput,
+} from "./runtime/live-capabilities.js";
 
 import type { AgentRuntime } from "./runtime/agent-runtime.js";
 import type { AgentRuntimeConfig } from "./runtime/types.js";

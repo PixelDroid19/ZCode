@@ -108,48 +108,56 @@ export function createScriptWorkflowAgentRuntime(input: {
     throw new Error(`Workflow child model must be provider-qualified: ${input.request.opts.model}`);
   }
   const modelSelection = requestedSelection ?? parentSelection;
-  return new AgentRuntime(
-    input.childSessionId,
-    {
-      ...inheritedConfig,
-      ...(systemPrompt === undefined ? {} : { systemPrompt }),
-      agentName: input.request.opts?.agentType ?? "zcode-workflow",
-      maxTurns: input.request.opts?.maxTurns ?? input.deps.runtimeConfig.maxTurns,
-      mode: "yolo",
-      modelSelection,
-      parentSessionId: input.deps.sessionId,
-      subagents: { enabled: false },
-      taskType: "workflow_child",
-      toolAllowlist: input.request.opts?.tools,
-      workingDirectory: input.deps.workingDirectory,
-      ...input.configOverrides,
-    },
-    {
-      ...createRuntimeDeps(input.deps, input.traceContext, input.childSessionId, {
-        // 对外交互端口只能由父 runtime 铸造：子会话不是客户端认识的身份。
-        // 这里过去直接用 `appOptions.providerRuntimeHeadersPort` /
-        // `deps.permissionBroker`，于是 actor 带着 `sess_dwf-…` 去问桌面，桌面
-        // `requireSession` 抛错、response 永不发出，子代理在首个模型请求前挂死。
-        agentId: input.childSessionId,
-        agentType: input.request.opts?.agentType ?? "zcode-workflow",
-        childSessionId: input.childSessionId,
-        description: input.request.opts?.label ?? input.request.opts?.agentType ?? "workflow agent",
-        ...(input.traceContext.turnId === undefined
-          ? {}
-          : { parentTurnId: input.traceContext.turnId }),
-      }),
-      ...(input.workflowSubmitPort ? { workflowSubmitPort: input.workflowSubmitPort } : {}),
-      ...(input.workflowSubmitPort && input.workflowSubmitSchema
-        ? { workflowSubmitSchema: input.workflowSubmitSchema }
-        : {}),
-      ...(input.workflowEscalatePort
-        ? { workflowEscalatePort: input.workflowEscalatePort }
-        : {}),
-      ...(input.modelRequestAdmission
-        ? { modelRequestAdmission: input.modelRequestAdmission }
-        : {}),
-    },
-  );
+  const capabilitySource = input.deps.runtime.createInheritedCapabilitySource({
+    inheritRuntimeConfig: true,
+  });
+  try {
+    return new AgentRuntime(
+      input.childSessionId,
+      {
+        ...inheritedConfig,
+        ...(systemPrompt === undefined ? {} : { systemPrompt }),
+        agentName: input.request.opts?.agentType ?? "zcode-workflow",
+        maxTurns: input.request.opts?.maxTurns ?? input.deps.runtimeConfig.maxTurns,
+        mode: "yolo",
+        modelSelection,
+        parentSessionId: input.deps.sessionId,
+        subagents: { enabled: false },
+        taskType: "workflow_child",
+        toolAllowlist: input.request.opts?.tools,
+        workingDirectory: input.deps.workingDirectory,
+        ...input.configOverrides,
+      },
+      {
+        capabilitySource,
+        ...createRuntimeDeps(input.deps, input.traceContext, input.childSessionId, {
+          // 对外交互端口只能由父 runtime 铸造：子会话不是客户端认识的身份。
+          // 这里过去直接用 `appOptions.providerRuntimeHeadersPort` /
+          // `deps.permissionBroker`，于是 actor 带着 `sess_dwf-…` 去问桌面，桌面
+          // `requireSession` 抛错、response 永不发出，子代理在首个模型请求前挂死。
+          agentId: input.childSessionId,
+          agentType: input.request.opts?.agentType ?? "zcode-workflow",
+          childSessionId: input.childSessionId,
+          description:
+            input.request.opts?.label ?? input.request.opts?.agentType ?? "workflow agent",
+          ...(input.traceContext.turnId === undefined
+            ? {}
+            : { parentTurnId: input.traceContext.turnId }),
+        }),
+        ...(input.workflowSubmitPort ? { workflowSubmitPort: input.workflowSubmitPort } : {}),
+        ...(input.workflowSubmitPort && input.workflowSubmitSchema
+          ? { workflowSubmitSchema: input.workflowSubmitSchema }
+          : {}),
+        ...(input.workflowEscalatePort ? { workflowEscalatePort: input.workflowEscalatePort } : {}),
+        ...(input.modelRequestAdmission
+          ? { modelRequestAdmission: input.modelRequestAdmission }
+          : {}),
+      },
+    );
+  } catch (error) {
+    void capabilitySource?.dispose?.();
+    throw error;
+  }
 }
 
 function createRuntimeDeps(

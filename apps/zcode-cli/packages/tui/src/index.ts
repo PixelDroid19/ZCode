@@ -2,6 +2,7 @@ export { runTui } from "./tui.js";
 export type {
   TuiClipboardImage,
   TuiImageMediaType,
+  TuiReadCapabilitiesStatus,
   TuiListMcpServers,
   TuiGetMainSessionId,
   TuiListWorkflowRuns,

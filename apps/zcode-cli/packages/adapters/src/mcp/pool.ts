@@ -449,7 +449,12 @@ function connectionKey(input: {
     input.config.isolation === "workspace"
       ? (resolveWorkspaceKey(input.connectOptions) ?? "")
       : input.leaseId;
-  return [input.serverName, scope, stableStringify(input.config)].join("\u0000");
+  return [
+    input.serverName,
+    scope,
+    input.connectOptions.capabilityRevision ?? "",
+    stableStringify(input.config),
+  ].join("\u0000");
 }
 
 function stableStringify(value: unknown): string {

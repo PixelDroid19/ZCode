@@ -28,7 +28,10 @@ export function refreshBranchAwareBuiltInTools(runtime: AgentRuntimeInternal): v
   registerBuiltInTools(runtime.registry, {
     bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
     includeSkill: Boolean(runtime.skillPort),
-    includeAgent: Boolean(runtime.subagentPort),
+    // The port remains allocated while subagents are disabled so a later live capability
+    // snapshot can enable profiles without replacing its task state. Tool visibility must
+    // still follow the same enabled gate as the initial runtime registration.
+    includeAgent: runtime.config.subagents?.enabled !== false && Boolean(runtime.subagentPort),
     embeddedSearchEnabled,
     // 本函数是**第二个**
     // 注册入口，且刻意只传一个精简选项集。对「只有 true 才注册」的门（OffPeak / Cron / Workflow…）

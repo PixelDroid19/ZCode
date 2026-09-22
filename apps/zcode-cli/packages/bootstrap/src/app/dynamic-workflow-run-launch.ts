@@ -234,7 +234,7 @@ export function launchDynamicWorkflowRun(
       submitProfile,
       modelRequestAdmission,
     }) => {
-      const runtime = deps.createActorRuntime({
+      const runtime = await deps.createActorRuntime({
         runId,
         sessionId,
         actor,
@@ -266,29 +266,34 @@ export function launchDynamicWorkflowRun(
       // workflow-actor-model.ts）。先落库再接入会话：一次失败的会话持久化会让这次 ask 失败，
       // 但「当时选了哪个模型」这条审计事实照旧留在 journal 里。rehydrate 路径也要写——
       // pin 缺席（升级前的旧 run）时这一轮才是第一次有解析结果可记。
-      journalActorResolvedModel({
-        actor,
-        journal: deps.journal,
-        selection: requireActorModelSelection(runtime, actor),
-        runId,
-      });
-      const attached = await attachActorSession({
-        actor,
-        deps,
-        runId,
-        runtime,
-        sessionId,
-      });
-      if (attached === "rehydrated") return runtime;
-      await persistActorSession({
-        actor,
-        deps,
-        parentSessionId,
-        runId,
-        runtime,
-        sessionId,
-      });
-      return runtime;
+      try {
+        journalActorResolvedModel({
+          actor,
+          journal: deps.journal,
+          selection: requireActorModelSelection(runtime, actor),
+          runId,
+        });
+        const attached = await attachActorSession({
+          actor,
+          deps,
+          runId,
+          runtime,
+          sessionId,
+        });
+        if (attached === "rehydrated") return runtime;
+        await persistActorSession({
+          actor,
+          deps,
+          parentSessionId,
+          runId,
+          runtime,
+          sessionId,
+        });
+        return runtime;
+      } catch (error) {
+        await runtime.disposeCapabilities();
+        throw error;
+      }
     },
   });
 

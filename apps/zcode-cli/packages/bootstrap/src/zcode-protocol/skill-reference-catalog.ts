@@ -20,8 +20,11 @@ export async function getSkillReferenceCatalog(
   const params = parseParams(zcodeSkillsReferenceCatalogParamsSchema, rawParams);
   if (params.sessionId) {
     const record = requireSession(context, params.sessionId);
+    // A catalog read is a safe capability boundary: active turns keep their adopted snapshot,
+    // while idle sessions may atomically publish a newer one before this projection is read.
+    const capabilityStatus = await record.app.refreshCapabilities();
     const outcome = await record.app.getSkillCatalog();
-    return toResult("session", outcome);
+    return { ...toResult("session", outcome), capabilityStatus };
   }
 
   // 旧 UI cache 只在 workspace 首次挂载时扫描，用户从文件系统手动新增

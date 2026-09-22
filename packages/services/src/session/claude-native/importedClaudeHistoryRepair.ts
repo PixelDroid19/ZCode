@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type {
   ZCodeAgentMcpServer,
+  ZCodeMcpServersSource,
   ZCodeSessionImportHistory,
   ZCodeSessionImportMessage,
   ZCodeSessionStateSnapshot,
@@ -31,6 +32,8 @@ interface ImportedClaudeHistoryRepairResult {
 
 interface ImportedClaudeSessionRepairTarget extends ImportedClaudeHistoryRepairTarget {
   mcpServers?: ZCodeAgentMcpServer[];
+  mcpServersSource?: ZCodeMcpServersSource;
+  mcpServersBase?: ZCodeAgentMcpServer[];
 }
 
 interface ImportedClaudeSessionRepairCreateParams {
@@ -42,6 +45,8 @@ interface ImportedClaudeSessionRepairCreateParams {
   thoughtLevel?: string;
   persistence: "immediate";
   mcpServers?: ZCodeAgentMcpServer[];
+  mcpServersSource?: ZCodeMcpServersSource;
+  mcpServersBase?: ZCodeAgentMcpServer[];
   importedHistory: ZCodeSessionImportHistory;
 }
 
@@ -210,6 +215,12 @@ export async function repairImportedClaudeSessionSnapshot<T>(params: {
     thoughtLevel: params.snapshot.settings.thoughtLevel.current,
     persistence: "immediate",
     mcpServers: params.target.mcpServers,
+    ...(params.target.mcpServersSource !== undefined
+      ? { mcpServersSource: params.target.mcpServersSource }
+      : {}),
+    ...(params.target.mcpServersSource === "directory" && params.target.mcpServersBase !== undefined
+      ? { mcpServersBase: params.target.mcpServersBase }
+      : {}),
     importedHistory: {
       source: "claudeCode",
       title: history.title,

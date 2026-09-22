@@ -81,6 +81,9 @@ export * from "./hooks/index.js";
 
 // MCP components
 export * from "./mcp/index.js";
+// Bootstrap stages live MCP snapshots and must use the same official-CUA authority predicate as
+// the legacy runtime path rather than duplicating a security-sensitive check.
+export { computeOfficialCuaServerNames } from "./runtime/methods/mcp.js";
 
 // Plugin 对话引用（@ Plugin capability hint）
 export * from "./plugin-reference/index.js";
@@ -166,6 +169,14 @@ export type {
   WorkspaceRewindRestoredFile,
   WorkspaceRewindResult,
   RuntimeFactory,
+  PreparedRuntimeCapabilities,
+  PreparedRuntimeCapabilitiesConfig,
+  PreparedRuntimeMcpCapabilities,
+  InheritedRuntimeCapabilities,
+  InheritedRuntimeCapabilitySourceOptions,
+  RuntimeCapabilitiesStatus,
+  RuntimeCapabilitySource,
+  RuntimeCapabilitySourcePrepareInput,
 } from "./runtime.js";
 
 // Output helpers

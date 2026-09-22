@@ -41,6 +41,11 @@ export function startMcpStartup(
   this: AgentRuntimeInternal,
   traceContext: TraceContext,
 ): Promise<McpConnectionSnapshot> | undefined {
+  if (this.capabilitySource?.ownsMcp) {
+    this.mcpInitialized = true;
+    this.mcpToolsRegistered = true;
+    return this.mcpStartupPromise;
+  }
   if (this.mcpInitialized) return this.mcpStartupPromise;
   this.mcpInitialized = true;
 
@@ -123,6 +128,11 @@ export async function initializeMcp(
   this: AgentRuntimeInternal,
   traceContext: TraceContext,
 ): Promise<void> {
+  if (this.capabilitySource?.ownsMcp) {
+    this.mcpInitialized = true;
+    this.mcpToolsRegistered = true;
+    return;
+  }
   if (this.mcpToolsRegistered) return;
 
   const startup = this.startMcpStartup(traceContext);

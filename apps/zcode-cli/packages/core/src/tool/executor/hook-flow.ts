@@ -22,8 +22,9 @@ export async function runPreToolUseHooks(
   traceContext: TraceContext,
   signal?: AbortSignal,
 ): Promise<HookRunResult> {
-  if (!deps.hookRunner) return { additionalContexts: [] };
-  return deps.hookRunner.run(
+  const hookRunner = deps.getHookRunner ? deps.getHookRunner() : deps.hookRunner;
+  if (!hookRunner) return { additionalContexts: [] };
+  return hookRunner.run(
     {
       cwd: deps.getWorkingDirectory(),
       hookEventName: HookEventName.PreToolUse,
@@ -56,8 +57,9 @@ export async function runPermissionRequestHooks(
   traceContext: TraceContext,
   signal?: AbortSignal,
 ): Promise<PermissionBrokerResult | undefined> {
-  if (!deps.hookRunner) return undefined;
-  const hookResult = await deps.hookRunner.run(
+  const hookRunner = deps.getHookRunner ? deps.getHookRunner() : deps.hookRunner;
+  if (!hookRunner) return undefined;
+  const hookResult = await hookRunner.run(
     {
       cwd: deps.getWorkingDirectory(),
       hookEventName: HookEventName.PermissionRequest,
@@ -131,8 +133,9 @@ export async function runPostToolUseHooks(
   traceContext: TraceContext,
   signal?: AbortSignal,
 ): Promise<HookRunResult> {
-  if (!deps.hookRunner) return { additionalContexts: [] };
-  return deps.hookRunner.run(
+  const hookRunner = deps.getHookRunner ? deps.getHookRunner() : deps.hookRunner;
+  if (!hookRunner) return { additionalContexts: [] };
+  return hookRunner.run(
     {
       artifactRefs: artifactPath ? [artifactPath] : undefined,
       cwd: deps.getWorkingDirectory(),
@@ -164,9 +167,10 @@ export async function runPostToolUseFailureHooks(
   traceContext: TraceContext,
   signal?: AbortSignal,
 ): Promise<HookRunResult> {
-  if (!deps.hookRunner) return { additionalContexts: [] };
+  const hookRunner = deps.getHookRunner ? deps.getHookRunner() : deps.hookRunner;
+  if (!hookRunner) return { additionalContexts: [] };
   const normalized = error instanceof Error ? error : new Error(String(error));
-  return deps.hookRunner.run(
+  return hookRunner.run(
     {
       cwd: deps.getWorkingDirectory(),
       error: {

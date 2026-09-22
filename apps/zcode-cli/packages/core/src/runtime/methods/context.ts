@@ -61,8 +61,14 @@ export async function ensureContextInitialized(
   // Bash cd 之后 workingDirectory 会变化，但 workspaceRoot 仍表示会话初始工作区边界。
   this.workspaceRoot = snapshot.workingDirectory;
   this.contextSourceSnapshot = snapshot;
-  this.startMcpStartup(traceContext);
-  this.skillLoadOutcome = await this.discoverSkillsForContext(traceContext);
+  if (this.capabilitySource) {
+    // A source returns an already staged Skill/MCP snapshot. Core must not fall back to its legacy
+    // discovery path here, because that would introduce a second extension I/O owner.
+    await this.refreshCapabilities({ traceContext });
+  } else {
+    this.startMcpStartup(traceContext);
+    this.skillLoadOutcome = await this.discoverSkillsForContext(traceContext);
+  }
   this.memoryRoot = await this.loadProjectMemoryRoot(traceContext);
   this.memoryIndexContent = await loadProjectMemoryIndexContent(this, this.memoryRoot);
   this.contextBuilder = this.createContextBuilderFromSnapshot(snapshot, this.memoryRoot, {
@@ -70,6 +76,9 @@ export async function ensureContextInitialized(
     model,
   });
   this.initializeMessageHistoryFromContext(this.contextBuilder, traceContext);
+  // The builder just consumed the currently adopted source fields. Future adoption explicitly
+  // marks this stale so a model boundary can rebuild even when `prepare()` later returns undefined.
+  this.capabilityContextRevision = this.getCapabilitiesStatus().revision;
   this.contextInitialized = true;
 }
 
@@ -80,6 +89,9 @@ export async function getSkillCatalog(
   // Composer 曾独立扫描磁盘，所以运行中的 Session 会看到 AgentRuntime
   // 尚未加载的新 Skill。先经过 runtime 唯一的 context 初始化门，再返回防御性副本，
   // 让 UI 与本 Session 实际可用的 Skill 保持同一快照；新 runtime 会自然重新发现。
+  if (!this.activeTurn) {
+    await this.refreshCapabilities({ traceContext });
+  }
   await this.ensureContextInitialized(traceContext);
   const outcome = this.skillLoadOutcome ?? {
     skills: [],
@@ -110,6 +122,7 @@ export function createContextBuilderFromSnapshot(
   if (this.config.subagentContext) {
     return createSubagentContextBuilder({
       agentPrompt: this.config.subagentContext.agentPrompt,
+      capabilityInstructions: this.capabilityInstructions,
       currentDate: snapshot.currentDate,
       envInfo,
       model: options.model,
@@ -141,7 +154,18 @@ export function createContextBuilderFromSnapshot(
     guidanceToolNames: this.getTools(options.model).map((tool) => tool.name),
   };
 
-  return createContextBuilder(contextConfig).setToolRegistry(this.registry);
+  const builder = createContextBuilder(contextConfig).setToolRegistry(this.registry);
+  if (this.capabilityInstructions) {
+    builder.addSection({
+      cacheHint: "stable",
+      content: this.capabilityInstructions,
+      injectionTarget: "system",
+      name: "Live capabilities",
+      preview: this.capabilityInstructions.slice(0, 100),
+      source: "live_capabilities",
+    });
+  }
+  return builder;
 }
 
 export async function loadProjectMemoryRoot(

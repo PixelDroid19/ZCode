@@ -6,8 +6,10 @@ import type { AppUsageRange, AppUsageSnapshot, ZCodeTaskTokenUsageResult } from 
 import type { ZCodeAutomation, ZCodeAutomationRun } from "@zcode/shared";
 import type {
   ZCodeStorageStartupState,
+  ZCodeCapabilitiesStatus,
   ZCodeDeliveryKind,
   ZCodeAgentMcpServer,
+  ZCodeMcpServersSource,
   ZCodeBackgroundTurnAttribution,
   TraceId,
   ZCodeSessionCompactResult,
@@ -144,10 +146,19 @@ export interface ZCodeAgentSessionTarget extends ZCodeAgentWorkspaceTarget {
   sessionId: string;
 }
 
+/** Derived sideband fact from the session runtime; it never accepts or stores capabilities in services. */
+export interface ZCodeAgentCapabilitiesChangedEvent extends ZCodeAgentWorkspaceTarget {
+  sessionId: string;
+  status: ZCodeCapabilitiesStatus;
+}
+
 export interface ZCodeAgentResumeSessionParams extends ZCodeAgentSessionTarget {
   model?: ModelSelection;
   thoughtLevel?: string;
   mcpServers?: ZCodeAgentMcpServer[];
+  mcpServersSource?: ZCodeMcpServersSource;
+  /** Raw directory projection before host workspace/CUA augmentation. */
+  mcpServersBase?: ZCodeAgentMcpServer[];
   // 冷恢复会重建 runtime，工具面隔离必须和 create 保持同一安全边界（CUA 只放行 zcode-cua 工具、
   // 禁 Bash 等）。否则 resume 后模型可见工具面/执行权限会比创建时更宽。
   toolAllowlist?: string[];
@@ -199,6 +210,9 @@ export interface ZCodeAgentCreateSessionParams extends ZCodeAgentWorkspaceTarget
   /** automation 执行会话关闭模型二次命名，保持首条用户 query 作为稳定标题。 */
   titleGenerationEnabled?: boolean;
   mcpServers?: ZCodeAgentMcpServer[];
+  mcpServersSource?: ZCodeMcpServersSource;
+  /** Raw directory projection before host workspace/CUA augmentation. */
+  mcpServersBase?: ZCodeAgentMcpServer[];
   toolAllowlist?: string[];
   toolDenylist?: string[];
   importedHistory?: ZCodeSessionImportHistory;
@@ -717,6 +731,10 @@ export interface IZCodeAgentService {
   onDynamicMcpResourceSamples(): Event<ZCodeMcpResourceSample[]>;
   /** Bash 完成事实，仅可信 Host 资源旁路订阅。 */
   onDynamicToolExecResource(): Event<ZCodeToolExecResource>;
+  /** Runtime capability adoption status scoped to the routed workspace attachment. */
+  onDynamicCapabilitiesChanged(
+    params: ZCodeAgentWorkspaceTarget,
+  ): Event<ZCodeAgentCapabilitiesChangedEvent>;
   /**
    * @deprecated 旧协议订阅面（session/subscribe + session/event + state.updated）。
    * task-index syncer 已迁 v4 sessions-index/workspace-config 帧；

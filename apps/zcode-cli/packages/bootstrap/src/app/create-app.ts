@@ -66,6 +66,7 @@ import {
 import { createWorkflowFacade } from "./workflow-facade.js";
 import { createInputFacade } from "./input-facade.js";
 import { createPluginFacadeForApp } from "./plugin-facade.js";
+import { createAppCapabilitySource } from "./live-capabilities.js";
 import { resolvePluginRuntimeFeatures } from "./plugin-runtime-features.js";
 import { createSessionFacade } from "./session-facade.js";
 import { resolveAppRuntimeConfig, runtimeConfigLogContext } from "./runtime-config.js";
@@ -198,6 +199,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
   let nodeReplBrowserBroker: NodeReplBrowserBroker | undefined;
   let ownedNodeReplBrowserBroker: NodeReplBrowserBroker | undefined;
   let providerModelRuntime: ApiProviderModelRuntime | undefined;
+  let disposeStartupCapabilities: (() => Promise<void> | void) | undefined;
   try {
     const storageRoot = resolvePath(configResult.config.storage.dir);
     const cliStorageRoot = getCliStorageRoot(storageRoot);
@@ -289,8 +291,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       event: "bootstrap.app.startup.runtime_config.completed",
       stage: "resolve_runtime_config",
     });
-    // Plugin 对话引用：身份 catalog 在 App（Session runtime）
-    // 创建时冻结一次。冷恢复会重建 App，天然拿到新 catalog；已有 Session 不热加载新 Plugin。
+    // 初始身份目录用于启动；之后只有 runtime 已采用的版本可以进入会话视图。
     const pluginReferenceCatalog = buildPluginReferenceCatalog(pluginOutcome.plugins);
     runtimeConfig.pluginReferenceCatalog = pluginReferenceCatalog;
     let runtime: AgentRuntime | undefined;
@@ -588,7 +589,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
         ? undefined
         : createDynamicWorkflowRunService({
             concurrency: workflowConcurrencyGovernor,
-            createActorRuntime: ({
+            createActorRuntime: async ({
               persona,
               pinnedModel,
               runSubagentModel,
@@ -597,8 +598,9 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
               submitProfile,
               escalatePort,
               modelRequestAdmission,
-            }) =>
-              createScriptWorkflowAgentRuntime({
+            }) => {
+              await getRuntime().refreshCapabilities({ traceContext });
+              return createScriptWorkflowAgentRuntime({
                 childSessionId: actorSessionId,
                 configOverrides: {
                   // persona 的身份（有效名 + system）→ context builder 的工作流子代理路径。
@@ -666,7 +668,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
                 workflowEscalatePort: escalatePort,
                 // 请求级准入端口：driver 在治理器在场时给出，runner 每次尝试先过闸门。
                 ...(modelRequestAdmission === undefined ? {} : { modelRequestAdmission }),
-              }),
+              });
+            },
             // 边界记账与转录截断都读写 actor 会话的消息，走的必须是同一个 store。
             actorTranscriptStore: sessionStore,
             // 用户面产物的字节落点：与主会话、workflow 子
@@ -723,7 +726,35 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       registry: options.providerRegistry,
       currentSelection: () => getRuntime().getSessionModelSelection(),
     });
+    const liveCapabilities = createAppCapabilitySource({
+      options,
+      initialConfig: configResult,
+      initialPlugins: pluginOutcome,
+      initialRuntimeConfig: runtimeConfig,
+      initialMcpPort: mcpPort,
+      ownsInitialMcpPort: ownsMcpPort,
+      appVersion,
+      cliStorageRoot,
+      storageRoot,
+      workingDirectory,
+      logger,
+      transformMcpServers(servers, features) {
+        if (browserControlPort && features?.browserUse && servers.node_repl?.type === "stdio") {
+          nodeReplBrowserBroker ??=
+            options.nodeReplBrowserBroker ??
+            (ownedNodeReplBrowserBroker = createNodeReplBrowserBroker({
+              browserControlPort,
+              logger,
+              platform: options.platform,
+            }));
+          return injectNodeReplBrowserBroker(servers, nodeReplBrowserBroker);
+        }
+        return servers;
+      },
+    });
+    disposeStartupCapabilities = () => liveCapabilities.source.dispose?.();
     runtime = new AgentRuntime(sessionId, runtimeConfig, {
+      capabilitySource: liveCapabilities.source,
       agentTelemetry: modelTelemetry.agentExecution,
       // 主代理的模型请求过治理器的 observer：立即放行，但让治理器看见它的 429 / 成功。
       modelRequestAdmission: workflowConcurrencyGovernor.observer(),
@@ -777,6 +808,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       appVersion,
       traceContext,
     });
+    disposeStartupCapabilities = () => getRuntime().disposeCapabilities();
     markRuntimeConstructed({
       hasInjectedModelAdapter: options.modelAdapter !== undefined,
       sessionId,
@@ -865,7 +897,12 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       loggerFactory,
       mcpPort,
       ownsExecutionPort,
-      ownsMcpPort,
+      // capability source owns connection generations and drains their individual leases.
+      ownsMcpPort: false,
+      getLiveMcpPort: liveCapabilities.getMcpPort,
+      getLiveMcpRevision: liveCapabilities.getMcpRevision,
+      workspaceIdentity: runtimeConfig.workspaceIdentity ?? runtimeConfig.memory?.workspaceIdentity,
+      getLiveMcpServers: liveCapabilities.getConfiguredServers,
       closeNodeReplBrowserBroker: async () => {
         await ownedNodeReplBrowserBroker?.close();
       },
@@ -1268,7 +1305,14 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
             },
           }),
       ...createPluginFacadeForApp({ configResult, options, workingDirectory }),
-      getPluginReferenceCatalog: () => pluginReferenceCatalog,
+      getCapabilitiesStatus: () => getRuntime().getCapabilitiesStatus(),
+      refreshCapabilities: async () => {
+        await prepareUserExecutionBoundary({ traceContext });
+        return await getRuntime().refreshCapabilities({ traceContext });
+      },
+      subscribeCapabilities: (listener) => getRuntime().subscribeCapabilities(listener),
+      getPluginReferenceCatalog: () =>
+        getRuntime().getPluginReferenceCatalog() ?? pluginReferenceCatalog,
       getSkillCatalog: async () => {
         // Skill 目录属于 context 初始化结果。冷恢复必须先恢复 Session 边界，再读取
         // 新 runtime 的快照，不能绕开 resume 后用旧工作目录独立扫描。
@@ -1279,6 +1323,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       ...inputFacade,
     };
   } catch (error) {
+    await disposeStartupCapabilities?.();
     providerModelRuntime?.dispose();
     void modelTelemetry.shutdown().catch(() => undefined);
     void ownedNodeReplBrowserBroker?.close();

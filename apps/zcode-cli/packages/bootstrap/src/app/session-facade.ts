@@ -85,6 +85,7 @@ interface SessionResourceCloseInput {
   beginShutdown: () => void;
   closeBrowserSession: () => Promise<void>;
   closeExecution?: () => Promise<void> | void;
+  closeCapabilities?: () => Promise<void>;
   closeMcp?: () => Promise<void> | void;
   closeNodeReplBrowserBroker?: () => Promise<void> | void;
   closeSessionStore?: () => void;
@@ -107,6 +108,9 @@ interface CreateSessionFacadeDeps {
   logger: Logger;
   loggerFactory: LoggerFactory;
   mcpPort?: McpPort;
+  getLiveMcpPort?: () => McpPort | undefined;
+  getLiveMcpRevision?: () => string | undefined;
+  getLiveMcpServers?: () => Record<string, import("@zcode/contracts").McpServerConfig>;
   ownsExecutionPort: boolean;
   ownsMcpPort: boolean;
   ownsSessionStore: boolean;
@@ -121,6 +125,7 @@ interface CreateSessionFacadeDeps {
   traceContext: TraceContext;
   untrustedProjectMcpServers: Set<string>;
   workingDirectory: string;
+  workspaceIdentity?: string;
 }
 
 export function createSessionFacade(deps: CreateSessionFacadeDeps): SessionFacade {
@@ -294,6 +299,8 @@ export function createSessionFacade(deps: CreateSessionFacadeDeps): SessionFacad
         await closeSessionResources({
           beginShutdown: () => deps.runtime.beginShutdown(),
           closeBrowserSession: () => deps.runtime.closeBrowserSession(),
+          // 先发起 Execution 关闭以取消在飞进程，Capability lease 才能正常排空。
+          closeCapabilities: () => deps.runtime.disposeCapabilities(),
           closeExecution:
             deps.ownsExecutionPort && deps.executionPort.close
               ? () => deps.executionPort.close?.()
@@ -352,23 +359,30 @@ export function createSessionFacade(deps: CreateSessionFacadeDeps): SessionFacad
         ? [...(registryState.selection?.model.config.optionSpecs.reasoningLevel.values ?? [])]
         : [];
     },
-    listMcpServers: async () =>
-      listMcpServerStatuses(
-        deps.mcpPort,
-        deps.configuredMcpServers,
+    listMcpServers: async () => {
+      await deps.runtime.refreshCapabilities({ traceContext: deps.traceContext });
+      return listMcpServerStatuses(
+        deps.getLiveMcpPort ? deps.getLiveMcpPort() : deps.mcpPort,
+        deps.getLiveMcpServers?.() ?? deps.configuredMcpServers,
         deps.untrustedProjectMcpServers,
-      ),
+      );
+    },
     connectMcpServer: async (name) => {
-      const config = deps.configuredMcpServers[name];
+      await deps.runtime.refreshCapabilities({ traceContext: deps.traceContext });
+      const config = (deps.getLiveMcpServers?.() ?? deps.configuredMcpServers)[name];
       if (!config) {
         throw new Error(`MCP server is not configured: ${name}`);
       }
-      if (!deps.mcpPort) {
+      const mcpPort = deps.getLiveMcpPort ? deps.getLiveMcpPort() : deps.mcpPort;
+      if (!mcpPort) {
         throw new Error("MCP is disabled");
       }
-      return deps.mcpPort.connectServer(name, config, {
+      return mcpPort.connectServer(name, config, {
         trace: deps.traceContext,
         workingDirectory: deps.workingDirectory,
+        // 重连沿用已发布代际及远端身份，不能把同路径 workspace 合并到无版本 lease。
+        workspaceIdentity: deps.workspaceIdentity?.trim() || deps.workingDirectory,
+        capabilityRevision: deps.getLiveMcpRevision?.(),
       });
     },
     readBackgroundBashOutput: (workId, sessionId) =>
@@ -378,8 +392,9 @@ export function createSessionFacade(deps: CreateSessionFacadeDeps): SessionFacad
         traceContext: options?.traceContext ?? deps.traceContext,
       }),
     disconnectMcpServer: async (name) => {
-      if (!deps.mcpPort) return undefined;
-      return deps.mcpPort.disconnectServer(name);
+      const mcpPort = deps.getLiveMcpPort ? deps.getLiveMcpPort() : deps.mcpPort;
+      if (!mcpPort) return undefined;
+      return mcpPort.disconnectServer(name);
     },
     listCheckpoints: async (options) => {
       await deps.prepareResume();
@@ -588,6 +603,7 @@ async function closeSessionResources(input: SessionResourceCloseInput): Promise<
   const resources: Array<[name: string, close: (() => Promise<void> | void) | undefined]> = [
     ["browser_session", input.closeBrowserSession],
     ["execution", input.closeExecution],
+    ["capabilities", input.closeCapabilities],
     ["mcp", input.closeMcp],
     ["node_repl_browser_broker", input.closeNodeReplBrowserBroker],
   ];

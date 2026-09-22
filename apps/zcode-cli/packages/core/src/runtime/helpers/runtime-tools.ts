@@ -10,6 +10,7 @@ import {
 import type { HookRunner, SessionId, ToolExecutor, TraceContext } from "../deps.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import type { AgentRuntimeDeps } from "../types.js";
+import type { AgentRuntimeConfig } from "../types.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "../methods/embedded-search-branch.js";
 import { getSessionShellSelectionFromConfig } from "../methods/session-shell-environment.js";
 import { createRuntimeSessionModePort } from "../session-mode-port.js";
@@ -21,6 +22,8 @@ import {
 } from "./tool-allowlist.js";
 import { isStaleBranchRuntimeTaskEvent } from "../methods/runtime-command-generation.js";
 import { resolveEnabledProjectMemoryRoot } from "./project-memory.js";
+import { createToolRegistry } from "../../tool/registry.js";
+import type { ToolEntry } from "../../tool/types.js";
 
 const DEFAULT_SUBAGENT_BACKGROUND_BASH_MAX_MS = 3_600_000;
 const EMPTY_RUNTIME_HOOK_CONFIG = {
@@ -43,16 +46,29 @@ export function initializeRuntimeTooling(
   };
 }
 
-function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentRuntimeDeps): void {
-  const nodeReplEnabled = runtime.config.runtimeFeatures?.nodeRepl === true;
-  const browserUseEnabled = resolveRuntimeBrowserUseEnabled(runtime, deps);
-  registerBuiltInTools(runtime.registry, {
-    bashTimeoutPolicy: runtime.config.bashTimeoutPolicy,
-    includeSkill: Boolean(runtime.skillPort),
-    includeAgent: Boolean(runtime.subagentPort),
-    includeSendMessage: runtime.subagentPort?.sendMessage !== undefined,
+export function registerRuntimeBuiltInTools(
+  runtime: AgentRuntimeInternal,
+  deps: AgentRuntimeDeps,
+  registry = runtime.registry,
+  snapshot: {
+    config?: AgentRuntimeConfig;
+    skillPort?: AgentRuntimeInternal["skillPort"];
+    subagentPort?: AgentRuntimeInternal["subagentPort"];
+  } = {},
+): void {
+  const config = snapshot.config ?? runtime.config;
+  const skillPort = "skillPort" in snapshot ? snapshot.skillPort : runtime.skillPort;
+  const subagentPort = "subagentPort" in snapshot ? snapshot.subagentPort : runtime.subagentPort;
+  const nodeReplEnabled = config.runtimeFeatures?.nodeRepl === true;
+  const browserUseEnabled = resolveRuntimeBrowserUseEnabled(runtime, deps, config);
+  registerBuiltInTools(registry, {
+    bashTimeoutPolicy: config.bashTimeoutPolicy,
+    includeSkill: Boolean(skillPort),
+    includeAgent: config.subagents?.enabled !== false && Boolean(subagentPort),
+    includeSendMessage:
+      config.subagents?.enabled !== false && subagentPort?.sendMessage !== undefined,
     includeRespondToCoordinator:
-      runtime.config.taskType === "subagent_child" && Boolean(deps.coordinatorResponsePort),
+      config.taskType === "subagent_child" && Boolean(deps.coordinatorResponsePort),
     // submit_result 只在注入了 workflowSubmitPort 的 workflow actor 会话注册。以端口存在为门，
     // 与 taskType 无关：workflow actor 是 workflow_child，其 runtimeScope 目前是 "main"。
     includeSubmitResult: Boolean(deps.workflowSubmitPort),
@@ -63,29 +79,47 @@ function registerRuntimeBuiltInTools(runtime: AgentRuntimeInternal, deps: AgentR
     // escalate 与 submit_result 同门同理由：端口在场即注册（不做 opt-in：最可能撞墙的 actor 恰是作者没标记的那个）。
     includeEscalate: Boolean(deps.workflowEscalatePort),
     includeWorkflow: Boolean(deps.workflowPort),
-    includeAutomation: Boolean(deps.automationPort) && runtime.config.taskType !== "subagent_child",
+    includeAutomation: Boolean(deps.automationPort) && config.taskType !== "subagent_child",
     // offPeakPort 只在 host 下发 offPeakToolEnabled 时注入（灰度/远程门在 host 端），
     // 端口存在即代表曝光允许；subagent 子会话与 automation 同规则不暴露。
-    includeOffPeak: Boolean(deps.offPeakPort) && runtime.config.taskType !== "subagent_child",
+    includeOffPeak: Boolean(deps.offPeakPort) && config.taskType !== "subagent_child",
     // 动态工作流灰度门：与 off-peak 相反，
     // 这里不能用端口在场做判据——十个工具的端口在任何 CLI 里都装配齐全，灰度是 Host 的决定。
     // 取值收在 tool-allowlist.ts，与分支刷新那个入口共用同一个推导。
-    includeDynamicWorkflow: resolveRuntimeDynamicWorkflowToolsIncluded(runtime.config),
+    includeDynamicWorkflow: resolveRuntimeDynamicWorkflowToolsIncluded(config),
     // browserControlPort 只是宿主能力，不应隐式暴露高权限 node_repl。
     // node_repl/browser-use 由 ZCode 官方 browser-use 插件启停推导出的 runtimeFeatures 控制。
     includeNodeRepl: nodeReplEnabled,
     includeBrowserUse: browserUseEnabled,
     embeddedSearchEnabled: resolveRuntimeEmbeddedSearchEnabled(runtime),
-    agentProfiles: runtime.config.subagents?.profiles,
-    allowedTools: resolveBuiltInToolAllowlist(runtime.config),
+    agentProfiles: config.subagents?.profiles,
+    allowedTools: resolveBuiltInToolAllowlist(config),
     // workflow_child 的结构性禁用（CreateWorkflow/SaveWorkflow 因 alwaysAsk 隐形挂起；
     // ResumeWorkflowRun 已免确认但因「child 内不得再编排」仍在列）在 helper
     // 里与 turn 级名单合并，见 tool-allowlist.ts 的根因注释。
-    disallowedTools: resolveRuntimeDisallowedTools(runtime.config),
+    disallowedTools: resolveRuntimeDisallowedTools(config),
   });
 }
 
-function createRuntimeHookRunner(
+/** Builds the current core-owned tool set without touching the published runtime registry. */
+export function collectRuntimeBuiltInTools(
+  runtime: AgentRuntimeInternal,
+  deps: AgentRuntimeDeps,
+  snapshot?: {
+    config?: AgentRuntimeConfig;
+    skillPort?: AgentRuntimeInternal["skillPort"];
+    subagentPort?: AgentRuntimeInternal["subagentPort"];
+  },
+): ToolEntry[] {
+  const staging = createToolRegistry();
+  registerRuntimeBuiltInTools(runtime, deps, staging, snapshot);
+  return staging
+    .list()
+    .map((name) => staging.get(name))
+    .filter((entry): entry is ToolEntry => entry !== undefined);
+}
+
+export function createRuntimeHookRunner(
   runtime: AgentRuntimeInternal,
   deps: AgentRuntimeDeps,
   sessionId: SessionId,
@@ -171,9 +205,15 @@ function createRuntimeToolExecutor(
     },
     executionPort: deps.executionPort,
     browserControlPort: browserUseEnabled ? deps.browserControlPort : undefined,
+    getBrowserControlPort: () =>
+      resolveRuntimeBrowserUseEnabled(runtime, deps) ? deps.browserControlPort : undefined,
     browserDocumentationRoot: browserUseEnabled
       ? runtime.config.runtimeFeatures?.browserDocumentationRoot
       : undefined,
+    getBrowserDocumentationRoot: () =>
+      resolveRuntimeBrowserUseEnabled(runtime, deps)
+        ? runtime.config.runtimeFeatures?.browserDocumentationRoot
+        : undefined,
     fileSystemPort: deps.fileSystemPort,
     httpClientPort: deps.httpClientPort,
     imageProcessorPort: deps.imageProcessorPort,
@@ -181,8 +221,10 @@ function createRuntimeToolExecutor(
     pdfDocumentPort: deps.pdfDocumentPort,
     embeddedSearchBackend: runtime.config.embeddedSearchBackend,
     nativeSearchEnhancementsEnabled: runtime.config.nativeSearchEnhancementsEnabled,
-    skillPort: deps.skillPort,
+    skillPort: runtime.skillPort,
     subagentPort: runtime.subagentPort,
+    getSkillPort: () => runtime.skillPort,
+    getSubagentPort: () => runtime.subagentPort,
     coordinatorResponsePort: deps.coordinatorResponsePort,
     workflowSubmitPort: deps.workflowSubmitPort,
     workflowEscalatePort: deps.workflowEscalatePort,
@@ -203,6 +245,7 @@ function createRuntimeToolExecutor(
         : undefined,
     getBashShellSelection: () => getSessionShellSelectionFromConfig(runtime.config),
     hookRunner,
+    getHookRunner: () => runtime.hookRunner,
     getWorkingDirectory: () => runtime.workingDirectory,
     setWorkingDirectory: runtime.setWorkingDirectory.bind(runtime),
     getWorkspaceRoot: () => runtime.workspaceRoot,
@@ -224,10 +267,9 @@ function createRuntimeToolExecutor(
 function resolveRuntimeBrowserUseEnabled(
   runtime: AgentRuntimeInternal,
   deps: AgentRuntimeDeps,
+  config = runtime.config,
 ): boolean {
-  return (
-    runtime.config.runtimeFeatures?.browserUse === true && deps.browserControlPort !== undefined
-  );
+  return config.runtimeFeatures?.browserUse === true && deps.browserControlPort !== undefined;
 }
 
 function shouldEnqueueRuntimeBackgroundTaskNotification(

@@ -3,6 +3,10 @@ import type {
   ZCodePluginReferenceCatalogEntry,
   ZCodePluginsReferenceCatalogResult,
 } from "@zcode/shared";
+import {
+  capabilityStatusError,
+  capabilityStatusRefreshSignal,
+} from "@/hooks/capabilityStatusRefresh.js";
 import { useWorkspaceServicesResolution } from "@/hooks/useWorkspaceServices.js";
 import { logger } from "@/logger.js";
 
@@ -21,12 +25,14 @@ const EMPTY_STATE: PluginReferenceCatalogState = {
 };
 
 interface ScopedPluginReferenceCatalogState {
-  scope: object | null;
+  authorityScope: object | null;
+  requestScope: object | null;
   value: PluginReferenceCatalogState;
 }
 
 const EMPTY_SCOPED_STATE: ScopedPluginReferenceCatalogState = {
-  scope: null,
+  authorityScope: null,
+  requestScope: null,
   value: EMPTY_STATE,
 };
 
@@ -93,6 +99,7 @@ export function usePluginReferenceCatalog(
     useState<ScopedPluginReferenceCatalogState>(EMPTY_SCOPED_STATE);
   const [runtimeRevision, setRuntimeRevision] = useState(0);
   const requestSeqRef = useRef(0);
+  const capabilityStatusSignalRef = useRef<string | null>(null);
   // 身份/隔离语义统一 workspaceKey = workspaceIdentity?.trim() || workspacePath。
   const workspaceKey = workspaceIdentity?.trim() || workspacePath;
   const remoteSessionId =
@@ -102,6 +109,12 @@ export function usePluginReferenceCatalog(
   const requestKey = `${workspaceKey}|${remoteSessionId ?? "local"}|${sessionId ?? "draft"}|runtime:${runtimeRevision}|refresh:${options?.refreshRevision ?? 0}`;
   const services = resolution.services;
   const rpcReady = resolution.rpcReady;
+  // Runtime revisions are safe refreshes of the same authority. Keep their adopted entries visible;
+  // any workspace/session/attachment/service transition gets a distinct authority scope.
+  const authorityScope = useMemo(
+    () => ({}),
+    [enabled, remoteSessionId, rpcReady, services, sessionId, workspaceIdentity, workspacePath],
+  );
 
   useEffect(() => {
     if (!enabled || !workspacePath || !sessionId || !rpcReady) return;
@@ -113,13 +126,33 @@ export function usePluginReferenceCatalog(
     });
     return () => subscription.dispose();
   }, [enabled, rpcReady, services, sessionId, workspaceKey, workspacePath]);
+
+  useEffect(() => {
+    if (!enabled || !workspacePath || !sessionId || !rpcReady) return;
+    const subscription = services.zcodeAgentService.onDynamicCapabilitiesChanged({
+      workspacePath,
+      ...(workspaceIdentity ? { workspaceIdentity } : {}),
+      ...(remoteSessionId ? { remoteSessionId } : {}),
+    })((event) => {
+      const signal = capabilityStatusRefreshSignal(
+        {
+          workspacePath,
+          ...(workspaceIdentity ? { workspaceIdentity } : {}),
+          ...(remoteSessionId ? { remoteSessionId } : {}),
+          sessionId,
+        },
+        event,
+      );
+      if (!signal || signal === capabilityStatusSignalRef.current) return;
+      capabilityStatusSignalRef.current = signal;
+      setRuntimeRevision((current) => current + 1);
+    });
+    return () => subscription.dispose();
+  }, [enabled, remoteSessionId, rpcReady, services, sessionId, workspaceIdentity, workspacePath]);
   // 每次 Picker 重新打开、workspace/session/remote attachment 改变，或 services
   // 实例重连时都创建新的请求身份。渲染只接受同一 scope 的结果，因此 effect 尚未
   // 发出新请求的首帧也不会短暂泄露上一 authority 的 catalog。
-  const requestScope = useMemo(
-    () => ({}),
-    [enabled, remoteSessionId, requestKey, rpcReady, services, workspacePath],
-  );
+  const requestScope = useMemo(() => ({}), [authorityScope, requestKey]);
 
   useEffect(() => {
     if (!enabled || !workspacePath || !rpcReady) {
@@ -127,9 +160,13 @@ export function usePluginReferenceCatalog(
     }
     const seq = ++requestSeqRef.current;
     let cancelled = false;
-    setScopedState({
-      scope: requestScope,
-      value: { entries: [], authority: null, loading: true, error: null },
+    setScopedState((current) => {
+      const retained = current.authorityScope === authorityScope ? current.value : EMPTY_STATE;
+      return {
+        authorityScope,
+        requestScope,
+        value: { ...retained, loading: true, error: null },
+      };
     });
     const params = {
       workspacePath,
@@ -159,12 +196,13 @@ export function usePluginReferenceCatalog(
       .then((result) => {
         if (cancelled || seq !== requestSeqRef.current) return;
         setScopedState({
-          scope: requestScope,
+          authorityScope,
+          requestScope,
           value: {
             entries: result.plugins,
             authority: result.authority,
             loading: false,
-            error: null,
+            error: capabilityStatusError(result.capabilityStatus),
           },
         });
       })
@@ -178,14 +216,14 @@ export function usePluginReferenceCatalog(
             requestKey,
           });
         }
-        setScopedState({
-          scope: requestScope,
-          value: {
-            entries: [],
-            authority: null,
-            loading: false,
-            error: message,
-          },
+        setScopedState((current) => {
+          if (current.authorityScope !== authorityScope || current.requestScope !== requestScope) {
+            return current;
+          }
+          return {
+            ...current,
+            value: { ...current.value, loading: false, error: message },
+          };
         });
       });
     return () => {
@@ -199,6 +237,7 @@ export function usePluginReferenceCatalog(
     enabled,
     options?.dedupeSessionRequest,
     options?.suppressErrorLog,
+    authorityScope,
     remoteSessionId,
     requestKey,
     requestScope,
@@ -209,7 +248,7 @@ export function usePluginReferenceCatalog(
     workspacePath,
   ]);
 
-  if (!enabled || !workspacePath || !rpcReady || scopedState.scope !== requestScope) {
+  if (!enabled || !workspacePath || !rpcReady || scopedState.authorityScope !== authorityScope) {
     return EMPTY_STATE;
   }
   return scopedState.value;

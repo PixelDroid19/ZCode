@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ZCodeSkillReferenceCatalogEntry } from "@zcode/shared";
+import {
+  capabilityStatusError,
+  capabilityStatusRefreshSignal,
+} from "@/hooks/capabilityStatusRefresh.js";
 import { useWorkspaceServicesResolution } from "@/hooks/useWorkspaceServices.js";
 import { logger } from "@/logger.js";
 
@@ -11,7 +15,8 @@ interface ConversationSkillCatalogState {
 }
 
 interface ScopedConversationSkillCatalogState {
-  scope: object | null;
+  authorityScope: object | null;
+  requestScope: object | null;
   value: ConversationSkillCatalogState;
 }
 
@@ -23,7 +28,8 @@ const EMPTY_STATE: ConversationSkillCatalogState = {
 };
 
 const EMPTY_SCOPED_STATE: ScopedConversationSkillCatalogState = {
-  scope: null,
+  authorityScope: null,
+  requestScope: null,
   value: EMPTY_STATE,
 };
 
@@ -51,12 +57,27 @@ export function useSkills(options: UseSkillsOptions): ConversationSkillCatalogSt
     useState<ScopedConversationSkillCatalogState>(EMPTY_SCOPED_STATE);
   const [runtimeRevision, setRuntimeRevision] = useState(0);
   const requestSeqRef = useRef(0);
+  const capabilityStatusSignalRef = useRef<string | null>(null);
   const workspaceKey = options.workspaceIdentity?.trim() || options.workspacePath;
   const remoteSessionId =
     resolution.remoteSessionId ?? options.preferredRemoteSessionId ?? undefined;
   const services = resolution.services;
   const rpcReady = resolution.rpcReady;
   const requestKey = `${workspaceKey}|${remoteSessionId ?? "local"}|${options.sessionId ?? "draft"}|runtime:${runtimeRevision}`;
+  // The authority scope intentionally excludes the runtime revision. A revision refresh may keep
+  // the current session catalog on screen, while a service/workspace/session change must blank it.
+  const authorityScope = useMemo(
+    () => ({}),
+    [
+      options.enabled,
+      options.sessionId,
+      options.workspaceIdentity,
+      options.workspacePath,
+      remoteSessionId,
+      rpcReady,
+      services,
+    ],
+  );
 
   useEffect(() => {
     if (!options.enabled || !options.sessionId || !rpcReady) return;
@@ -69,20 +90,53 @@ export function useSkills(options: UseSkillsOptions): ConversationSkillCatalogSt
     return () => subscription.dispose();
   }, [options.enabled, options.sessionId, rpcReady, services, workspaceKey]);
 
+  useEffect(() => {
+    const sessionId = options.sessionId;
+    if (!options.enabled || !sessionId || !rpcReady) return;
+    const subscription = services.zcodeAgentService.onDynamicCapabilitiesChanged({
+      workspacePath: options.workspacePath,
+      ...(options.workspaceIdentity ? { workspaceIdentity: options.workspaceIdentity } : {}),
+      ...(remoteSessionId ? { remoteSessionId } : {}),
+    })((event) => {
+      const signal = capabilityStatusRefreshSignal(
+        {
+          workspacePath: options.workspacePath,
+          ...(options.workspaceIdentity ? { workspaceIdentity: options.workspaceIdentity } : {}),
+          ...(remoteSessionId ? { remoteSessionId } : {}),
+          sessionId,
+        },
+        event,
+      );
+      if (!signal || signal === capabilityStatusSignalRef.current) return;
+      capabilityStatusSignalRef.current = signal;
+      setRuntimeRevision((current) => current + 1);
+    });
+    return () => subscription.dispose();
+  }, [
+    options.enabled,
+    options.sessionId,
+    options.workspaceIdentity,
+    options.workspacePath,
+    remoteSessionId,
+    rpcReady,
+    services,
+  ]);
+
   // 用 scope 身份隔离渲染：key 切换后的 effect 尚未执行时也只返回空态，避免旧 Session
   // 或旧 remote attachment 的 Skill 在一帧内泄漏到新 Composer。
-  const requestScope = useMemo(
-    () => ({}),
-    [options.enabled, remoteSessionId, requestKey, rpcReady, services],
-  );
+  const requestScope = useMemo(() => ({}), [authorityScope, requestKey]);
 
   useEffect(() => {
     if (!options.enabled || !options.workspacePath || !rpcReady) return;
     const seq = ++requestSeqRef.current;
     let cancelled = false;
-    setScopedState({
-      scope: requestScope,
-      value: { skills: [], authority: null, loading: true, error: null },
+    setScopedState((current) => {
+      const retained = current.authorityScope === authorityScope ? current.value : EMPTY_STATE;
+      return {
+        authorityScope,
+        requestScope,
+        value: { ...retained, loading: true, error: null },
+      };
     });
     const params = {
       workspacePath: options.workspacePath,
@@ -95,12 +149,13 @@ export function useSkills(options: UseSkillsOptions): ConversationSkillCatalogSt
       .then((result) => {
         if (cancelled || seq !== requestSeqRef.current) return;
         setScopedState({
-          scope: requestScope,
+          authorityScope,
+          requestScope,
           value: {
             skills: result.skills,
             authority: result.authority,
             loading: false,
-            error: null,
+            error: capabilityStatusError(result.capabilityStatus),
           },
         });
       })
@@ -111,9 +166,14 @@ export function useSkills(options: UseSkillsOptions): ConversationSkillCatalogSt
           error: message,
           requestKey,
         });
-        setScopedState({
-          scope: requestScope,
-          value: { skills: [], authority: null, loading: false, error: message },
+        setScopedState((current) => {
+          if (current.authorityScope !== authorityScope || current.requestScope !== requestScope) {
+            return current;
+          }
+          return {
+            ...current,
+            value: { ...current.value, loading: false, error: message },
+          };
         });
       });
     return () => {
@@ -124,6 +184,7 @@ export function useSkills(options: UseSkillsOptions): ConversationSkillCatalogSt
     options.sessionId,
     options.workspaceIdentity,
     options.workspacePath,
+    authorityScope,
     remoteSessionId,
     requestKey,
     requestScope,
@@ -135,7 +196,7 @@ export function useSkills(options: UseSkillsOptions): ConversationSkillCatalogSt
     !options.enabled ||
     !options.workspacePath ||
     !rpcReady ||
-    scopedState.scope !== requestScope
+    scopedState.authorityScope !== authorityScope
   ) {
     return EMPTY_STATE;
   }

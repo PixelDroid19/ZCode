@@ -35,11 +35,15 @@ export async function getPluginReferenceCatalog(
   const params = parseParams(zcodePluginsReferenceCatalogParamsSchema, rawParams);
   if (params.sessionId) {
     const record = requireSession(context, params.sessionId);
+    // A catalog read is a safe capability boundary: active turns keep their adopted snapshot,
+    // while idle sessions may atomically publish a newer one before this projection is read.
+    const capabilityStatus = await record.app.refreshCapabilities();
     const displayByPluginId = resolveReferenceListingDisplayByPluginId(
       params.workspace.workspacePath,
     );
     return {
       authority: "session",
+      capabilityStatus,
       plugins: record.app
         .getPluginReferenceCatalog()
         .plugins.map((entry) => toReferenceCatalogEntry(entry, displayByPluginId, includeCategory)),

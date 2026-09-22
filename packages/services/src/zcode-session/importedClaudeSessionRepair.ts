@@ -20,8 +20,16 @@ export async function repairEmptyImportedClaudeSessionSnapshot(params: {
       workspacePath: params.target.workspacePath,
       workspaceIdentity: params.target.workspaceIdentity,
       taskId: params.target.sessionId,
-      ...("mcpServers" in params.target && params.target.mcpServers
+      ...("mcpServers" in params.target && params.target.mcpServers !== undefined
         ? { mcpServers: params.target.mcpServers }
+        : {}),
+      ...("mcpServersSource" in params.target && params.target.mcpServersSource !== undefined
+        ? { mcpServersSource: params.target.mcpServersSource }
+        : {}),
+      ...("mcpServersBase" in params.target &&
+      params.target.mcpServersSource === "directory" &&
+      params.target.mcpServersBase !== undefined
+        ? { mcpServersBase: params.target.mcpServersBase }
         : {}),
     },
     createSession: (input) => params.agentService.createSession(input),

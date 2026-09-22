@@ -89,7 +89,9 @@ export interface ToolExecutorOptions {
   backgroundTaskControlPort?: BackgroundTaskControlPort;
   executionPort?: ExecutionPort;
   browserControlPort?: BrowserControlPort;
+  getBrowserControlPort?: () => BrowserControlPort | undefined;
   browserDocumentationRoot?: string;
+  getBrowserDocumentationRoot?: () => string | undefined;
   fileSystemPort?: FileSystemPort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort?: ImageProcessorPort;
@@ -99,6 +101,8 @@ export interface ToolExecutorOptions {
   nativeSearchEnhancementsEnabled?: boolean;
   skillPort?: SkillPort;
   subagentPort?: SubagentPort;
+  getSkillPort?: () => SkillPort | undefined;
+  getSubagentPort?: () => SubagentPort | undefined;
   coordinatorResponsePort?: CoordinatorResponsePort;
   workflowSubmitPort?: WorkflowSubmitPort;
   /** actor 的升级端口；存在即为该会话注册 escalate。 */
@@ -135,6 +139,7 @@ export interface ToolExecutorOptions {
   getMode?: () => CollaborationMode;
   maxConcurrency?: number;
   hookRunner?: HookRunner;
+  getHookRunner?: () => HookRunner | undefined;
 }
 
 export interface ToolExecutor {
@@ -193,7 +198,9 @@ export interface ToolExecutorDeps {
   backgroundTaskControlPort?: BackgroundTaskControlPort;
   executionPort?: ExecutionPort;
   browserControlPort?: BrowserControlPort;
+  getBrowserControlPort?: () => BrowserControlPort | undefined;
   browserDocumentationRoot?: string;
+  getBrowserDocumentationRoot?: () => string | undefined;
   fileSystemPort?: FileSystemPort;
   httpClientPort?: HttpClientPort;
   imageProcessorPort?: ImageProcessorPort;
@@ -203,6 +210,8 @@ export interface ToolExecutorDeps {
   nativeSearchEnhancementsEnabled?: boolean;
   skillPort?: SkillPort;
   subagentPort?: SubagentPort;
+  getSkillPort?: () => SkillPort | undefined;
+  getSubagentPort?: () => SubagentPort | undefined;
   coordinatorResponsePort?: CoordinatorResponsePort;
   workflowSubmitPort?: WorkflowSubmitPort;
   /** actor 的升级端口；存在即为该会话注册 escalate。 */
@@ -236,4 +245,5 @@ export interface ToolExecutorDeps {
   getMode: () => CollaborationMode;
   maxConcurrency: number;
   hookRunner?: HookRunner;
+  getHookRunner?: () => HookRunner | undefined;
 }

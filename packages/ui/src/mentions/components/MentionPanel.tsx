@@ -16,6 +16,8 @@ import {
   resolveVerticalScrollMaskState,
   type ScrollMaskState,
 } from "@/mentions/components/scrollMask.js";
+import { buildMentionPanelVirtualRows } from "./mentionPanelRows.js";
+import type { MentionPanelVirtualRow } from "./mentionPanelRows.js";
 
 export interface MentionPanelOption {
   id: string;
@@ -52,25 +54,6 @@ interface MentionPanelProps {
   onSelect: (index: number) => void;
 }
 
-type VirtualRow =
-  | {
-      kind: "section_header";
-      sectionId: string;
-      title: string;
-    }
-  | {
-      kind: "status";
-      sectionId: string;
-      content: "loading" | "error" | "empty";
-      text: string;
-    }
-  | {
-      kind: "option";
-      sectionId: string;
-      option: MentionPanelOption;
-      flatOptionIndex: number;
-    };
-
 const OPTION_ROW_HEIGHT = 34;
 const STATUS_ROW_HEIGHT = 40;
 const SECTION_HEADER_ROW_HEIGHT = 34;
@@ -79,57 +62,6 @@ const SECTION_HEADER_ROW_HEIGHT = 34;
 // 使用与命令项一致的 32px 可见高度和 34px 虚拟行高度，避免裁切或覆盖下一行。
 const SECTION_HEADER_CLASS_NAME =
   "flex h-8 items-center px-3 text-ui-base font-semibold uppercase tracking-wide text-foreground-subtle";
-
-function buildVirtualRows(sections: MentionPanelSection[]): VirtualRow[] {
-  const rows: VirtualRow[] = [];
-  let flatOptionIndex = 0;
-  const shouldRenderSectionHeader = sections.length > 1;
-
-  for (const section of sections) {
-    if (shouldRenderSectionHeader && section.title.trim().length > 0) {
-      rows.push({
-        kind: "section_header",
-        sectionId: section.id,
-        title: section.title,
-      });
-    }
-
-    if (section.errorText) {
-      rows.push({
-        kind: "status",
-        sectionId: section.id,
-        content: "error",
-        text: section.errorText,
-      });
-    } else if (section.loading) {
-      rows.push({
-        kind: "status",
-        sectionId: section.id,
-        content: "loading",
-        text: section.loadingText ?? section.emptyText,
-      });
-    } else if (section.options.length === 0) {
-      rows.push({
-        kind: "status",
-        sectionId: section.id,
-        content: "empty",
-        text: section.emptyText,
-      });
-    } else {
-      for (const option of section.options) {
-        rows.push({
-          kind: "option",
-          sectionId: section.id,
-          option,
-          flatOptionIndex,
-        });
-        flatOptionIndex += 1;
-      }
-    }
-  }
-
-  return rows;
-}
 
 export function MentionPanel({
   title,
@@ -147,7 +79,7 @@ export function MentionPanel({
   const [hoveredOptionIndex, setHoveredOptionIndex] = useState<number | null>(null);
   const [scrollMaskState, setScrollMaskState] = useState<ScrollMaskState>(EMPTY_SCROLL_MASK_STATE);
 
-  const virtualRows = useMemo(() => buildVirtualRows(sections), [sections]);
+  const virtualRows = useMemo(() => buildMentionPanelVirtualRows(sections), [sections]);
 
   const virtualizer = useVirtualizer({
     count: virtualRows.length,
@@ -278,12 +210,10 @@ export function MentionPanel({
               return (
                 <div
                   key={virtualItem.key}
+                  ref={virtualizer.measureElement}
+                  data-index={virtualItem.index}
+                  className="absolute left-0 top-0 w-full"
                   style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: `${virtualItem.size}px`,
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                 >
@@ -321,7 +251,11 @@ export function MentionPanel({
   );
 }
 
-function SectionHeaderRow({ row }: { row: Extract<VirtualRow, { kind: "section_header" }> }) {
+function SectionHeaderRow({
+  row,
+}: {
+  row: Extract<MentionPanelVirtualRow<MentionPanelOption>, { kind: "section_header" }>;
+}) {
   return (
     <div
       className={SECTION_HEADER_CLASS_NAME}
@@ -333,7 +267,11 @@ function SectionHeaderRow({ row }: { row: Extract<VirtualRow, { kind: "section_h
   );
 }
 
-function StatusRow({ row }: { row: Extract<VirtualRow, { kind: "status" }> }) {
+function StatusRow({
+  row,
+}: {
+  row: Extract<MentionPanelVirtualRow<MentionPanelOption>, { kind: "status" }>;
+}) {
   if (row.content === "loading") {
     return (
       <div
@@ -380,7 +318,7 @@ function OptionRow({
   onSelect,
   onHover,
 }: {
-  row: Extract<VirtualRow, { kind: "option" }>;
+  row: Extract<MentionPanelVirtualRow<MentionPanelOption>, { kind: "option" }>;
   isSelected: boolean;
   isHovered: boolean;
   onSelect: (index: number) => void;

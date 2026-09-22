@@ -157,6 +157,7 @@ export type {
   ZCodeAgentAttachmentBeginParams,
   ZCodeAgentAttachmentChunkParams,
   ZCodeAgentAttachmentTerminalParams,
+  ZCodeAgentCapabilitiesChangedEvent,
   ZCodeAgentCreateSessionParams,
   ZCodeAgentCuaPermissionObservation,
   ZCodeAgentInitializeResult,

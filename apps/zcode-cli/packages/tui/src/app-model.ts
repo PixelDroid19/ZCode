@@ -212,6 +212,8 @@ export type CacheStats = {
 };
 
 export type McpSidebarState = {
+  /** A failed runtime capability reload; MCP rows remain the last successful projection. */
+  capabilityReloadError?: string;
   error?: string;
   loading: boolean;
   servers: Record<string, McpServerStatus>;

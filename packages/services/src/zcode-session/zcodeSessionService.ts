@@ -175,6 +175,12 @@ export function createZCodeSessionService({
   async function withResolvedMcpServers<
     T extends ZCodeSessionCreateParams | ZCodeSessionResumeParams,
   >(params: T): Promise<T> {
+    const directorySource = params.mcpServersSource === "directory";
+    // 目录配置会先追加 workspace/CUA 运行时参数。保留变换前的列表，才能让 runtime
+    // 在下次目录 reload 时重新生成这些 host-only 增量；显式 [] 同样是完整目录投影。
+    const mcpServersBase = directorySource
+      ? (params.mcpServers ?? params.mcpServersBase)
+      : undefined;
     const mcpServers = appendWorkspaceToFilesystemMcpServers(
       params.mcpServers,
       params.workspacePath,
@@ -184,14 +190,19 @@ export function createZCodeSessionService({
           workspacePath: params.workspacePath,
         })
       : mcpServers;
-    if (resolvedMcpServers === params.mcpServers) {
+    if (!directorySource && resolvedMcpServers === params.mcpServers) {
       return params;
     }
     // desktop-continuous session 路径绕过 legacy task adapter，之前不会执行
     // filesystem MCP 的 workspace 注入，导致同一 MCP 在直接 session 首发时缺少当前项目授权。
     // 这里只改发往 runtime 的临时参数，不回写用户配置，避免污染跨 workspace 的 MCP 设置；
     // product CUA broker socket/token 同样只注入 runtime 参数。
-    return { ...params, mcpServers: resolvedMcpServers };
+    return {
+      ...params,
+      ...(resolvedMcpServers !== undefined ? { mcpServers: resolvedMcpServers } : {}),
+      ...(directorySource ? { mcpServersSource: "directory" as const } : {}),
+      ...(mcpServersBase !== undefined ? { mcpServersBase } : {}),
+    } as T;
   }
 
   return {

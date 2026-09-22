@@ -5,6 +5,7 @@ import { setCliProcessTitle } from "./process-name.js";
 import { applyCliRuntimeEnvSanitization } from "./env.js";
 import { ensureSeaRuntimeTools } from "./sea-runtime-tools.js";
 import { isPluginHostInvocation, runPluginHostCommand } from "./plugin-host-command.js";
+import { isLiveToolHostInvocation, runLiveToolHostCommand } from "./live-tool-host-command.js";
 import { scheduleCliExitWatchdog } from "./shutdown.js";
 import { installCliProcessErrorBoundary } from "./process-errors.js";
 import { installProtocolStderrBoundary } from "./protocol-stderr.js";
@@ -48,6 +49,14 @@ async function main(): Promise<void> {
     : undefined;
 
   try {
+    // SEA 工具脚本不能初始化 provider，也不能让 CLI watchdog 截断其异步输出。
+    if (isLiveToolHostInvocation(argv)) {
+      process.exitCode = await runLiveToolHostCommand(
+        { argv, stderr, stdin: process.stdin, stdout: process.stdout },
+        argv.slice(1),
+      );
+      return;
+    }
     if (!argv.includes("--prepare-storage"))
       Object.assign(process.env, await ensureSeaRuntimeTools());
     lifecycle?.signal.throwIfAborted();
@@ -100,7 +109,7 @@ async function main(): Promise<void> {
       // plugin-host 的 main() 在 MCP server.connect() 完成后会返回，但此时
       // stdio handle 正是服务的存活条件。一次性 CLI watchdog 不能把它误判为泄漏并强退。
       const exitCode = normalizeProcessExitCode(process.exitCode);
-      if (!isPluginHostInvocation(argv) || exitCode !== 0) {
+      if ((!isPluginHostInvocation(argv) && !isLiveToolHostInvocation(argv)) || exitCode !== 0) {
         scheduleCliExitWatchdog({ exitCode });
       }
       restoreConsole?.();

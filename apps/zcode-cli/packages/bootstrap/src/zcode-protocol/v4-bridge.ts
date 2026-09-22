@@ -1105,6 +1105,8 @@ export function createConversationV4Gateway(
     createSessionRecord: async ({
       workspaceId,
       mcpServers,
+      mcpServersSource,
+      mcpServersBase,
       offPeakToolEnabled,
       dynamicWorkflowEnabled,
     }) => {
@@ -1124,6 +1126,8 @@ export function createConversationV4Gateway(
         // MCP 是 runtime 创建期配置；v4 createSession 必须与 legacy
         // session/create 等价透传，否则创建的 session 永远不会启动这些工具。
         mcpServers,
+        mcpServersSource,
+        mcpServersBase,
         // Off-Peak 工具面 flag 同为 runtime 创建期配置，必须随 create 进入 record。
         ...(offPeakToolEnabled === true ? { offPeakToolEnabled: true } : {}),
         // 动态工作流灰度门同为 runtime 创建期配置：

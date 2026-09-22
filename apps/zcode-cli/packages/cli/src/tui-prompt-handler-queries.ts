@@ -4,6 +4,11 @@ import type { CommandCenterApp } from "./command-center.js";
 import { listAppEffortOptions } from "./command-center/effort-options.js";
 import type { TuiPromptHandler } from "./tui-command-state.js";
 import type { TuiSessionMetadata } from "@zcode/tui";
+import type { ZCodeCapabilitiesStatus } from "@zcode/shared";
+
+type CapabilityStatusApp = CommandCenterApp & {
+  getCapabilitiesStatus?: () => ZCodeCapabilitiesStatus;
+};
 
 export async function readTuiSessionMetadata(app: CommandCenterApp): Promise<TuiSessionMetadata> {
   const modelOptions = (await app.listModels?.()) ?? [];
@@ -61,6 +66,11 @@ export const attachTuiAppQueries = (
   submitPrompt.listMcpServers = async () => {
     const activeApp = await getApp();
     return activeApp.listMcpServers?.() ?? {};
+  };
+
+  submitPrompt.readCapabilitiesStatus = async () => {
+    const activeApp = (await getApp()) as CapabilityStatusApp;
+    return activeApp.getCapabilitiesStatus?.();
   };
 
   submitPrompt.listWorkflowRuns = async () => {

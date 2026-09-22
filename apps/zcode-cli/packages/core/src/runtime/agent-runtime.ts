@@ -83,7 +83,7 @@ import type {
   RuntimeBackgroundStopOptions,
   RuntimeBackgroundStopResult,
 } from "./methods/background.js";
-import { initializeRuntimeTooling } from "./helpers/runtime-tools.js";
+import { collectRuntimeBuiltInTools, initializeRuntimeTooling } from "./helpers/runtime-tools.js";
 import type {
   ActiveTurnInfo,
   ActiveForegroundExecutionState,
@@ -127,6 +127,14 @@ import { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
 import { disposeNodeReplSession } from "../tool/handlers/node-repl.js";
 import { cloneModelSelection } from "./model-selection.js";
+import { createRuntimeCapabilityController } from "./methods/live-capabilities.js";
+import type {
+  RuntimeCapabilitiesStatus,
+  RuntimeCapabilityController,
+  RuntimeCapabilitySource,
+  InheritedRuntimeCapabilitySourceOptions,
+} from "./live-capabilities.js";
+import type { PluginReferenceCatalog } from "@zcode/contracts";
 
 // oxlint-disable typescript-eslint/no-unsafe-declaration-merging
 export class AgentRuntime {
@@ -145,6 +153,7 @@ export class AgentRuntime {
   private now: () => Date;
   private isRemoteWorkspace: () => boolean;
   private registry: ToolRegistry;
+  private builtInToolNames = new Set<string>();
   private executor: ToolExecutor;
   private hookRunner?: HookRunner;
   private workspaceHookAdmission?: WorkspaceHookRuntimeAdmissionPort;
@@ -159,6 +168,7 @@ export class AgentRuntime {
   private readFileState: ReadFileStateMap;
   private cachedTools: ModelToolContract[] | null = null;
   private contextBuilder: ContextBuilder | null = null;
+  private capabilityContextRevision?: string;
   private contextInitialized = false;
   private contextSourceSnapshot?: ContextSourceSnapshot;
   private latestContextBuildResult?: ContextBuildResult;
@@ -167,6 +177,10 @@ export class AgentRuntime {
   private memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   private contextSourcePort?: ContextSourcePort;
   private skillPort?: SkillPort;
+  private capabilityInstructions?: string;
+  private capabilitySource?: RuntimeCapabilitySource;
+  private capabilityController?: RuntimeCapabilityController;
+  private capabilityDisposePromise?: Promise<void>;
   private mcpPort?: McpPort;
   private mcpStartupPromise?: Promise<McpConnectionSnapshot>;
   private residencyBlockingWorkCount = 0;
@@ -280,6 +294,7 @@ export class AgentRuntime {
     this.workingDirectory = config.workingDirectory ?? ".";
     this.contextSourcePort = deps.contextSourcePort;
     this.skillPort = deps.skillPort;
+    this.capabilitySource = deps.capabilitySource;
     this.mcpPort = deps.mcpPort;
     this.runtimeTaskRegistry = deps.runtimeTaskRegistry ?? new InMemoryRuntimeTaskRegistry();
     this.runtimeTaskRegistry.setActiveBranchGeneration?.(this.branchGeneration);
@@ -295,16 +310,22 @@ export class AgentRuntime {
     this.registry = deps.toolRegistry ?? createToolRegistry();
     this.workspaceRoot = this.workingDirectory;
     const tooling = initializeRuntimeTooling(runtime, deps, sessionId);
+    this.builtInToolNames = new Set(
+      collectRuntimeBuiltInTools(runtime, deps).map((entry) => entry.metadata.name),
+    );
     this.hookRunner = tooling.hookRunner;
     this.workspaceHookAdmission = deps.workspaceHookAdmission;
     this.executor = tooling.executor;
+    this.capabilityController = createRuntimeCapabilityController(runtime, deps);
 
     this.contextBuilder = deps.contextBuilder ?? null;
     if (this.contextBuilder) {
       runtime.initializeMessageHistoryFromContext(this.contextBuilder, this.rootTraceContext);
       this.contextInitialized = true;
     }
-    runtime.startMcpStartup(this.rootTraceContext);
+    if (!this.capabilitySource?.ownsMcp) {
+      runtime.startMcpStartup(this.rootTraceContext);
+    }
   }
 
   async closeBrowserSession(): Promise<void> {
@@ -491,6 +512,25 @@ export interface AgentRuntime {
    */
   invalidateToolCache(): void;
   getToolExecutor(): ToolExecutor;
+  /** Returns the last successfully adopted live-capability revision and refresh state. */
+  getCapabilitiesStatus(): RuntimeCapabilitiesStatus;
+  /**
+   * Prepares and publishes a source snapshot only while idle. Model boundaries use the internal
+   * refresh method so a currently active turn never observes a mid-step mutation.
+   */
+  refreshCapabilities(options?: {
+    abortSignal?: AbortSignal;
+    traceContext?: TraceContext;
+  }): Promise<RuntimeCapabilitiesStatus>;
+  subscribeCapabilities(listener: (status: RuntimeCapabilitiesStatus) => void): () => void;
+  /** A defensive copy of the catalog adopted with the current capability revision. */
+  getPluginReferenceCatalog(): PluginReferenceCatalog | undefined;
+  /** Creates an immutable, leased source for a child runtime that inherits the current snapshot. */
+  createInheritedCapabilitySource(
+    options?: InheritedRuntimeCapabilitySourceOptions,
+  ): RuntimeCapabilitySource | undefined;
+  /** Drains in-flight capability leases before releasing source-owned staged resources. */
+  disposeCapabilities(): Promise<void>;
   subscribeEvents(sink: SessionEventSink): () => void;
   /** Bootstrap-owned lifecycle producers append only validated session events through this durable path. */
   appendEvent(event: SessionEvent, traceContext: TraceContext): Promise<void>;

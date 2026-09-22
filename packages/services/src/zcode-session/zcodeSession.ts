@@ -2,6 +2,7 @@ import { ServiceChannels } from "@zcode/shared";
 import type {
   TraceId,
   ZCodeAgentMcpServer,
+  ZCodeMcpServersSource,
   ZCodeDeliveryKind,
   ZCodeMessageWithParts,
   ModelSelection,
@@ -41,6 +42,9 @@ export interface ZCodeSessionCreateParams extends ZCodeSessionWorkspaceTarget {
   persistence?: ZCodeSessionPersistence;
   thoughtLevel?: string;
   mcpServers?: ZCodeAgentMcpServer[];
+  mcpServersSource?: ZCodeMcpServersSource;
+  /** Raw directory projection before host workspace/CUA augmentation. */
+  mcpServersBase?: ZCodeAgentMcpServer[];
   importedHistory?: ZCodeSessionImportHistory;
 }
 
@@ -48,6 +52,9 @@ export interface ZCodeSessionResumeParams extends ZCodeTaskTarget {
   model?: ModelSelection;
   thoughtLevel?: string;
   mcpServers?: ZCodeAgentMcpServer[];
+  mcpServersSource?: ZCodeMcpServersSource;
+  /** Raw directory projection before host workspace/CUA augmentation. */
+  mcpServersBase?: ZCodeAgentMcpServer[];
   /**
    * 默认广播 resume 得到的历史快照，并让 shadow 订阅请求初始 snapshot。
    * 续聊发送前的 runtime 预恢复会关闭它，避免旧终态快照覆盖本地已开始的新输入运行态。

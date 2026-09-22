@@ -199,6 +199,8 @@ export interface McpConnectionSnapshot {
 }
 
 export interface McpConnectOptions {
+  /** Host-computed executable content revision; part of the connection identity. */
+  capabilityRevision?: string;
   /**
    * authorization_code OAuth callback 的等待上限。
    * 普通 MCP timeoutMs 只约束协议请求，session 启动需要单独限制 OAuth 授权等待。

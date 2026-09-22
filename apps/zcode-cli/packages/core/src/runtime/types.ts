@@ -110,6 +110,7 @@ import type { RuntimeTaskRegistry } from "../runtime-task/registry.js";
 import type { BashTimeoutPolicy } from "../tool/bash-timeout-policy.js";
 import type { PresentationSurface } from "../context/types.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
+import type { RuntimeCapabilitySource } from "./live-capabilities.js";
 
 // -----------------------------------------------
 // Agent Runtime
@@ -184,9 +185,9 @@ export interface AgentRuntimeConfig {
     trustedOfficialCuaServerNames?: readonly string[];
   };
   /**
-   * Session 冻结的 Plugin 身份 catalog。
-   * 由 bootstrap 在 App 创建时从 plugin loader 结果构建；runtime 只读，
-   * 用于 turn start 解析 `plugin://` 引用并与 live inventory 取交集。
+   * Session 当前已采用的 Plugin 身份 catalog。
+   * bootstrap 提供初始值和候选快照；runtime 仅在安全边界替换完整版本，
+   * 用于 turn start 解析 `plugin://` 引用并与该版本工具目录取交集。
    */
   pluginReferenceCatalog?: PluginReferenceCatalog;
   hooks?: HooksRuntimeConfig;
@@ -336,6 +337,11 @@ export interface AgentRuntimeDeps {
   pdfDocumentPort?: PdfDocumentPort;
   skillPort?: SkillPort;
   mcpPort?: McpPort;
+  /**
+   * Bootstrap-owned producer for complete, versioned extension snapshots. Core never uses this
+   * dependency to read plugin files or open replacement MCP connections.
+   */
+  capabilitySource?: RuntimeCapabilitySource;
   subagentPort?: SubagentPort;
   coordinatorResponsePort?: CoordinatorResponsePort;
   /** 工作流 actor 提交终态结果的端口；存在即作为 submit_result 工具的注册门。 */

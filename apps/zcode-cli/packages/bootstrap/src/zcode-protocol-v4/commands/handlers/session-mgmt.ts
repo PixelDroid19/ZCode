@@ -50,6 +50,8 @@ async function createSession(
   const { sessionId } = await host.createSessionRecord({
     workspaceId: payload.workspaceId,
     mcpServers: payload.mcpServers,
+    mcpServersSource: payload.mcpServersSource,
+    mcpServersBase: payload.mcpServersBase,
     offPeakToolEnabled: payload.offPeakToolEnabled,
     dynamicWorkflowEnabled: payload.dynamicWorkflowEnabled,
   });

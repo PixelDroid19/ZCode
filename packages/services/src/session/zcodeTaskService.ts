@@ -22,6 +22,7 @@ import type {
   TraceId,
   ZCodeSessionFile,
   ZCodeAgentMcpServer,
+  ZCodeMcpServersSource,
   ZCodeTaskSnapshot,
   ZCodeTaskSnapshotBody,
   ZCodeTaskSnapshotToolCallsSlice,
@@ -225,6 +226,8 @@ export interface IZCodeTaskService {
     draftSessionId?: string;
     forkedFromTaskId?: string;
     mcpServers?: ZCodeAgentMcpServer[];
+    mcpServersSource?: ZCodeMcpServersSource;
+    mcpServersBase?: ZCodeAgentMcpServer[];
     /** 定时任务派发时标记所属 automation，落 tasks-index 的 cron_automation_id 并归入 cron 分组。 */
     automationId?: string;
     /** 闲时任务派发时标记所属 off-peak 任务，落 tasks-index 的 off_peak_task_id。 */
@@ -368,6 +371,8 @@ export interface IZCodeTaskService {
     /** 闲时续跑恢复 pre-会话时补写 off-peak 标记（新会话在 createTask 已盖章）。 */
     offPeakTaskId?: string;
     mcpServers?: ZCodeAgentMcpServer[];
+    mcpServersSource?: ZCodeMcpServersSource;
+    mcpServersBase?: ZCodeAgentMcpServer[];
   }): Promise<ZCodeTaskMeta>;
 
   /** 列出 workspace 下所有已持久化的 task */

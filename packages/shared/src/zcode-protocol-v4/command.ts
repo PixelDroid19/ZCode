@@ -20,7 +20,10 @@ import {
   requestWorkspaceHookReviewTargetSchema,
 } from "./workspace-hook-review.js";
 import {
+  hasValidMcpServersProvenance,
+  ZCODE_MCP_SERVERS_PROVENANCE_ERROR,
   zcodeBrowserAmbientContextSchema,
+  zcodeMcpServersSourceSchema,
   zcodeProtocolMcpServerSchema,
 } from "../zcode-protocol/index.js";
 import { sharedContextRefSchema } from "./shared-context-ref.js";
@@ -42,27 +45,34 @@ const createSessionRequestedConfigSchema = z.object({
 // ── 命令 payload 全集 ──
 export const commandPayloadSchemas = {
   // firstInput 缺省 → phase=draft 空会话；携带 → 直接 turnHeader+userInput rows。
-  createSession: z.object({
-    workspaceId: z.string(),
-    firstInput: z
-      .object({
-        text: z.string(),
-        attachments: z.array(attachmentRefSchema).optional(),
-        modelSelection: modelSelectionSchema.optional(),
-        mode: submissionModeSchema.optional(),
-        planEnabled: z.boolean().optional(),
-      })
-      .optional(),
-    config: createSessionRequestedConfigSchema.optional(),
-    // MCP 是 runtime 启动期配置，必须随 create 一次性进入 record，不能在首发后补写。
-    mcpServers: z.array(zcodeProtocolMcpServerSchema).optional(),
-    // Off-Peak 工具面 flag，与 legacy session/create 等价——V4 createSession 是桌面
-    // 新会话的实际创建路径，不透传则 OffPeakCreate/OffPeakList 永不注册。additive，
-    // 旧 CLI 的 z.object 会静默丢弃该键（fail-closed）。
-    offPeakToolEnabled: z.boolean().optional(),
-    // 动态工作流灰度 flag，与 offPeakToolEnabled 同一模式。
-    dynamicWorkflowEnabled: z.boolean().optional(),
-  }),
+  createSession: z
+    .object({
+      workspaceId: z.string(),
+      firstInput: z
+        .object({
+          text: z.string(),
+          attachments: z.array(attachmentRefSchema).optional(),
+          modelSelection: modelSelectionSchema.optional(),
+          mode: submissionModeSchema.optional(),
+          planEnabled: z.boolean().optional(),
+        })
+        .optional(),
+      config: createSessionRequestedConfigSchema.optional(),
+      // MCP 是 runtime 启动期配置，必须随 create 一次性进入 record，不能在首发后补写。
+      mcpServers: z.array(zcodeProtocolMcpServerSchema).optional(),
+      mcpServersSource: zcodeMcpServersSourceSchema.optional(),
+      mcpServersBase: z.array(zcodeProtocolMcpServerSchema).optional(),
+      // Off-Peak 工具面 flag，与 legacy session/create 等价——V4 createSession 是桌面
+      // 新会话的实际创建路径，不透传则 OffPeakCreate/OffPeakList 永不注册。additive，
+      // 旧 CLI 的 z.object 会静默丢弃该键（fail-closed）。
+      offPeakToolEnabled: z.boolean().optional(),
+      // 动态工作流灰度 flag，与 offPeakToolEnabled 同一模式。
+      dynamicWorkflowEnabled: z.boolean().optional(),
+    })
+    .refine(hasValidMcpServersProvenance, {
+      message: ZCODE_MCP_SERVERS_PROVENANCE_ERROR,
+      path: ["mcpServersBase"],
+    }),
   // 父会话由 envelope.sessionId 指定；服务端从父 record 派生完整运行配置。
   // firstInput 存在时，child 创建完成后立即启动首条普通输入；缺省则保持空副屏。
   createSelectionSideSession: z.object({

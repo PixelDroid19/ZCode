@@ -383,8 +383,12 @@ async function executeToolCallImpl(
       backgroundTaskControlPort: deps.backgroundTaskControlPort,
       emitEvent,
       executionPort: deps.executionPort,
-      browserControlPort: deps.browserControlPort,
-      browserDocumentationRoot: deps.browserDocumentationRoot,
+      browserControlPort: deps.getBrowserControlPort
+        ? deps.getBrowserControlPort()
+        : deps.browserControlPort,
+      browserDocumentationRoot: deps.getBrowserDocumentationRoot
+        ? deps.getBrowserDocumentationRoot()
+        : deps.browserDocumentationRoot,
       fileSystemPort: deps.fileSystemPort,
       httpClientPort: deps.httpClientPort,
       imageProcessorPort: deps.imageProcessorPort,
@@ -400,8 +404,8 @@ async function executeToolCallImpl(
         enabled: embeddedSearchDecision?.useEmbeddedSearchBranch ?? false,
         ...(deps.nativeSearchEnhancementsEnabled === false ? { findAndGrepEnabled: false } : {}),
       },
-      skillPort: deps.skillPort,
-      subagentPort: deps.subagentPort,
+      skillPort: deps.getSkillPort ? deps.getSkillPort() : deps.skillPort,
+      subagentPort: deps.getSubagentPort ? deps.getSubagentPort() : deps.subagentPort,
       coordinatorResponsePort: deps.coordinatorResponsePort,
       workflowSubmitPort: deps.workflowSubmitPort,
       workflowEscalatePort: deps.workflowEscalatePort,

@@ -35,7 +35,9 @@ export class ToolExecutorImpl implements ToolExecutor {
       backgroundTaskControlPort: options.backgroundTaskControlPort,
       executionPort: options.executionPort,
       browserControlPort: options.browserControlPort,
+      getBrowserControlPort: options.getBrowserControlPort,
       browserDocumentationRoot: options.browserDocumentationRoot,
+      getBrowserDocumentationRoot: options.getBrowserDocumentationRoot,
       fileSystemPort: options.fileSystemPort,
       httpClientPort: options.httpClientPort,
       imageProcessorPort: options.imageProcessorPort,
@@ -45,6 +47,8 @@ export class ToolExecutorImpl implements ToolExecutor {
       nativeSearchEnhancementsEnabled: options.nativeSearchEnhancementsEnabled,
       skillPort: options.skillPort,
       subagentPort: options.subagentPort,
+      getSkillPort: options.getSkillPort,
+      getSubagentPort: options.getSubagentPort,
       coordinatorResponsePort: options.coordinatorResponsePort,
       workflowSubmitPort: options.workflowSubmitPort,
       workflowEscalatePort: options.workflowEscalatePort,
@@ -81,6 +85,7 @@ export class ToolExecutorImpl implements ToolExecutor {
       getMode: options.getMode ?? (() => options.mode ?? "build"),
       maxConcurrency: options.maxConcurrency ?? 10,
       hookRunner: options.hookRunner,
+      getHookRunner: options.getHookRunner,
     };
     this.backgroundTasks = new BackgroundTaskTracker(this.deps);
   }

@@ -19,12 +19,19 @@ async function collectLiveMcpServers(
   traceContext: TraceContext,
   toolDisallowlist: readonly string[] | undefined,
 ): Promise<LivePluginMcpServer[]> {
-  if (!runtime.mcpPort) return [];
   // initializeMcp 幂等；turn loop 的首个 provider 请求前本来就会等它，
   // 这里提前 await 不增加额外等待。引用绝不触发 connect/reconnect/OAuth——只读取现状。
   await runtime.initializeMcp(traceContext);
-  const statuses = await runtime.mcpPort.status();
   const snapshot = runtime.mcpStartupPromise ? await runtime.mcpStartupPromise : undefined;
+  // A live source publishes the exact staged status/tool projection together. Reading its port
+  // again here could mix a later connection state with the prior tool catalog, so use the adopted
+  // snapshot. Legacy MCP retains its existing live status read.
+  const statuses = runtime.capabilitySource?.ownsMcp
+    ? (snapshot?.statuses ?? {})
+    : runtime.mcpPort
+      ? await runtime.mcpPort.status()
+      : {};
+  if (Object.keys(statuses).length === 0) return [];
   const registeredToolNames = new Set(runtime.getTools().map((tool) => tool.name));
   // 与 turn-loop 的 provider 工具过滤保持完全相同的“完整工具名”语义；
   // 带参数的执行规则不会把整个工具从 provider 工具表移除，不能在 reminder 侧扩大解释。

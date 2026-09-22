@@ -108,6 +108,7 @@ import {
   type ZCodeUserInputRequestParams,
   type ZCodeUserInputResponse,
   type ZCodeAgentMcpServer,
+  type ZCodeMcpServersSource,
 } from "@zcode/shared";
 import type {
   ZCodeTaskListQuery,
@@ -131,6 +132,7 @@ import type {
 import { TaskIndexRepo } from "#src/session/taskIndexRepo.js";
 import type {
   IZCodeAgentService,
+  ZCodeAgentCreateSessionParams,
   ZCodeAgentServiceEvent,
   ZCodeAgentWorkspaceTarget,
 } from "./zcodeAgent.js";
@@ -196,6 +198,8 @@ interface TaskTargetWithMcpServers extends TaskTarget {
   model?: string;
   thoughtLevel?: string;
   mcpServers?: ZCodeAgentMcpServer[];
+  mcpServersSource?: ZCodeMcpServersSource;
+  mcpServersBase?: ZCodeAgentMcpServer[];
   toolDenylist?: string[];
 }
 
@@ -204,6 +208,10 @@ type ZCodeSendPromptRuntimeCommand = Extract<ZCodeTaskRuntimeCommand, { type: "s
 type ZCodeTerminalStreamEvent =
   | Extract<ZCodeStreamEvent, { type: "task_complete" }>
   | Extract<ZCodeStreamEvent, { type: "task_error" }>;
+type ResolvedProductMcpServers = Pick<
+  ZCodeAgentCreateSessionParams,
+  "mcpServers" | "mcpServersSource" | "mcpServersBase"
+>;
 
 const GLM_PROVIDER: ZCodeProvider = ZCODE_AGENT_PROVIDER;
 const EMPTY_SLASH_COMMANDS: ZCodeSlashCommand[] = [];
@@ -330,13 +338,30 @@ export function createZCodeTaskServiceAdapter(
   }
 
   async function resolveProductMcpServers(
-    servers: ZCodeAgentMcpServer[] | undefined,
-  ): Promise<ZCodeAgentMcpServer[] | undefined> {
-    const configuredServers = (servers?.length ?? 0) > 0 ? servers : undefined;
-    if (!configuredServers || !options.cuaProductMcpServerResolver) {
-      return configuredServers;
-    }
-    return options.cuaProductMcpServerResolver.resolveMcpServers(configuredServers);
+    params: Pick<
+      TaskTargetWithMcpServers,
+      "workspacePath" | "workspaceIdentity" | "mcpServers" | "mcpServersSource" | "mcpServersBase"
+    >,
+  ): Promise<ResolvedProductMcpServers> {
+    const directorySource = params.mcpServersSource === "directory";
+    // replayable 路径也会注入 CUA host 参数；保留解析前的目录投影，避免下次 reload
+    // 把 host-only 值误当成用户配置。[] 是用户提交的完整空映射，不能折叠成缺省。
+    const mcpServersBase = directorySource
+      ? (params.mcpServers ?? params.mcpServersBase)
+      : undefined;
+    const mcpServers = options.cuaProductMcpServerResolver
+      ? await options.cuaProductMcpServerResolver.resolveMcpServers(params.mcpServers, {
+          workspacePath: params.workspacePath,
+          workspaceIdentity: params.workspaceIdentity,
+        })
+      : params.mcpServers;
+    return {
+      ...(mcpServers !== undefined ? { mcpServers } : {}),
+      ...(params.mcpServersSource !== undefined
+        ? { mcpServersSource: params.mcpServersSource }
+        : {}),
+      ...(mcpServersBase !== undefined ? { mcpServersBase } : {}),
+    };
   }
 
   function workspaceKey(params: { workspacePath: string; workspaceIdentity?: string }): string {
@@ -1139,10 +1164,11 @@ export function createZCodeTaskServiceAdapter(
 
   async function resumeSnapshot(
     params: TaskTargetWithMcpServers,
+    resolvedMcpServers = resolveProductMcpServers(params),
   ): Promise<ZCodeSessionStateSnapshot> {
     rememberTaskTarget(params);
     const thoughtLevel = params.thoughtLevel?.trim();
-    const mcpServers = await resolveProductMcpServers(params.mcpServers);
+    const mcpServers = await resolvedMcpServers;
     return options.zcodeAgentService.resumeSession({
       workspacePath: params.workspacePath,
       workspaceIdentity: params.workspaceIdentity,
@@ -1151,7 +1177,7 @@ export function createZCodeTaskServiceAdapter(
       // session resume 内执行；这里带上当前 UI 模型，避免只保护 desktop continuous 主链路。
       model: params.model ? parseModelPickerValue(params.model) : undefined,
       ...(thoughtLevel ? { thoughtLevel } : {}),
-      ...(mcpServers ? { mcpServers } : {}),
+      ...mcpServers,
       ...(params.toolDenylist ? { toolDenylist: params.toolDenylist } : {}),
     });
   }
@@ -1212,10 +1238,18 @@ export function createZCodeTaskServiceAdapter(
   async function repairEmptyImportedClaudeSnapshot(
     params: TaskTargetWithMcpServers,
     snapshot: ZCodeSessionStateSnapshot,
+    resolvedMcpServers = resolveProductMcpServers(params),
   ): Promise<ZCodeSessionStateSnapshot> {
+    const {
+      mcpServers: _mcpServers,
+      mcpServersBase: _mcpServersBase,
+      mcpServersSource: _mcpServersSource,
+      ...target
+    } = params;
+    const mcpServers = await resolvedMcpServers;
     const repaired = await repairImportedClaudeSessionSnapshot({
       snapshot,
-      target: params,
+      target: { ...target, ...mcpServers },
       createSession: (input) => options.zcodeAgentService.createSession(input),
       onRepair: (history) => {
         logger.warn(
@@ -1240,16 +1274,17 @@ export function createZCodeTaskServiceAdapter(
   async function resumeTaskSnapshot(
     params: TaskTargetWithMcpServers,
   ): Promise<ZCodeSessionStateSnapshot> {
+    const mcpServers = resolveProductMcpServers(params);
     let snapshot: ZCodeSessionStateSnapshot;
     try {
-      snapshot = await resumeSnapshot(params);
+      snapshot = await resumeSnapshot(params, mcpServers);
     } catch (error) {
       if (!isSessionMissingError(error)) throw error;
       // 早期原生历史导入只保存了带 migrationSource 的快照，仍需升级成真实 ZCode session。
       // 复用导入模块的严格来源校验，避免清理 ACP 时误删这条独立的数据迁移路径。
       const history = await readLegacyImportedClaudeHistory(params);
       if (!history) throw error;
-      const mcpServers = await resolveProductMcpServers(params.mcpServers);
+      const resolved = await mcpServers;
       const restored = await options.zcodeAgentService.createSession({
         workspacePath: params.workspacePath,
         workspaceIdentity: params.workspaceIdentity,
@@ -1257,7 +1292,7 @@ export function createZCodeTaskServiceAdapter(
         sessionTraceId: history.traceId ?? createSessionTraceId(),
         persistence: "immediate",
         model: params.model ? parseModelPickerValue(params.model) : undefined,
-        ...(mcpServers ? { mcpServers } : {}),
+        ...resolved,
         ...(params.toolDenylist ? { toolDenylist: params.toolDenylist } : {}),
         importedHistory: {
           source: "claudeCode",
@@ -1271,7 +1306,7 @@ export function createZCodeTaskServiceAdapter(
       await syncTaskIndexMeta({ ...meta, migrationSource: "claudeCode" });
       return restored;
     }
-    return repairEmptyImportedClaudeSnapshot(params, snapshot);
+    return repairEmptyImportedClaudeSnapshot(params, snapshot, mcpServers);
   }
 
   function snapshotToMeta(snapshot: ZCodeSessionStateSnapshot): ZCodeTaskMeta {
@@ -1779,9 +1814,15 @@ export function createZCodeTaskServiceAdapter(
             }
           : undefined);
       const draftSessionId = params.draftSessionId?.trim();
-      const mcpServers = await resolveProductMcpServers(params.mcpServers);
+      const mcpServers = await resolveProductMcpServers({
+        workspacePath: target.workspacePath,
+        workspaceIdentity: target.workspaceIdentity,
+        mcpServers: params.mcpServers,
+        mcpServersSource: params.mcpServersSource,
+        mcpServersBase: params.mcpServersBase,
+      });
       let snapshot: ZCodeSessionStateSnapshot | null = null;
-      if (draftSessionId && !mcpServers) {
+      if (draftSessionId && mcpServers.mcpServers === undefined) {
         try {
           snapshot = await options.zcodeAgentService.readSession({
             ...target,
@@ -1849,7 +1890,7 @@ export function createZCodeTaskServiceAdapter(
             : {}),
           // replayable task facade 创建 session 时同样会启动 runtime；
           // 之前这里丢掉 mcpServers，导致手机远控路径和 desktop-continuous 的 MCP 行为不一致。
-          mcpServers,
+          ...mcpServers,
         });
       }
       const baseMeta = snapshotToMeta(snapshot);
@@ -2272,6 +2313,8 @@ export function createZCodeTaskServiceAdapter(
         model,
         thoughtLevel,
         mcpServers: params.mcpServers,
+        mcpServersSource: params.mcpServersSource,
+        mcpServersBase: params.mcpServersBase,
       });
       emitWorkspaceConfig(params, snapshot.settings);
       const snapshotMeta = await syncTaskIndexSnapshot(snapshot);

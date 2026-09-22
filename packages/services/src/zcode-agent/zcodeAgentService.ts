@@ -50,6 +50,7 @@ import {
   zcodeWorkflowsUpdateMetaResultSchema,
   zcodePluginsResolveSuggestedReferenceResultSchema,
   zcodePluginOperationProgressNotificationSchema,
+  zcodeSessionCapabilitiesChangedNotificationSchema,
   zcodePluginsRestoreBuiltinResultSchema,
   zcodePluginsSetEnabledResultSchema,
   zcodePluginsCancelOperationResultSchema,
@@ -114,6 +115,7 @@ import {
   type ZCodeTaskMode,
 } from "@zcode/shared";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
+import { createCapabilitiesChangedRouter } from "./capabilitiesChangedRouter.js";
 import { createOfficialMcpIssuanceAudit } from "#src/official-mcp/officialMcpIssuanceAudit.js";
 import type {
   AccountRequestAuthMaterial,
@@ -348,6 +350,8 @@ type SessionCreateCompatField =
   | "persistence"
   | "thoughtLevel"
   | "mcpServers"
+  | "mcpServersSource"
+  | "mcpServersBase"
   | "toolAllowlist"
   | "toolDenylist"
   | "offPeakToolEnabled"
@@ -355,6 +359,8 @@ type SessionCreateCompatField =
 type SessionResumeCompatField =
   | "thoughtLevel"
   | "mcpServers"
+  | "mcpServersSource"
+  | "mcpServersBase"
   | "toolAllowlist"
   | "toolDenylist"
   | "offPeakToolEnabled"
@@ -370,6 +376,8 @@ const SESSION_CREATE_OPTIONAL_COMPAT_FIELDS = new Set<SessionCreateCompatField>(
   "persistence",
   "thoughtLevel",
   "mcpServers",
+  "mcpServersSource",
+  "mcpServersBase",
   // CUA 工具隔离新增：buildSessionCreateParams 会带 toolAllowlist/toolDenylist。若旧 app-server
   // 的 .strict() schema 不认，需可降级重试而不是整个 createSession 硬失败。
   "toolAllowlist",
@@ -383,6 +391,8 @@ const SESSION_CREATE_OPTIONAL_COMPAT_FIELDS = new Set<SessionCreateCompatField>(
 const SESSION_RESUME_OPTIONAL_COMPAT_FIELDS = new Set<SessionResumeCompatField>([
   "thoughtLevel",
   "mcpServers",
+  "mcpServersSource",
+  "mcpServersBase",
   // 冷恢复也带工具面约束；旧 app-server 不认时降级重试而不是硬失败（与 create 一致）。
   "toolAllowlist",
   "toolDenylist",
@@ -613,6 +623,12 @@ function buildSessionCreateParams(
   },
   omittedFields: ReadonlySet<SessionCreateCompatField> = new Set(),
 ) {
+  const includeMcpServers = !omittedFields.has("mcpServers");
+  // source/base 是同一兼容单元。旧 server 不能同时保留两者时，必须退回旧版固定映射形状。
+  const includeMcpServersProvenance =
+    includeMcpServers &&
+    !omittedFields.has("mcpServersSource") &&
+    !omittedFields.has("mcpServersBase");
   return {
     sessionId: params.sessionId,
     workspace: buildWorkspaceRef(params),
@@ -631,8 +647,16 @@ function buildSessionCreateParams(
     // desktop-continuous 首发/恢复走 session service，不经过 legacy task adapter。
     // 之前这里没有把 UI 已解析的 MCP 带进 strict protocol params，runtimeConfig 只能看到空 MCP。
     // MCP 是 runtime 启动期配置，必须在 create/resume 请求边界显式传递，后续 sendPrompt 无法补上。
-    ...(params.mcpServers !== undefined && !omittedFields.has("mcpServers")
+    ...(params.mcpServers !== undefined && includeMcpServers
       ? { mcpServers: params.mcpServers }
+      : {}),
+    ...(params.mcpServersSource !== undefined && includeMcpServersProvenance
+      ? { mcpServersSource: params.mcpServersSource }
+      : {}),
+    ...(params.mcpServersSource === "directory" &&
+    params.mcpServersBase !== undefined &&
+    includeMcpServersProvenance
+      ? { mcpServersBase: params.mcpServersBase }
       : {}),
     // CUA 工具隔离字段是可降级的：旧 app-server 的 .strict() schema 若不认，兼容重试会把它们放进
     // omittedFields 省略后重试（而不是硬失败）。故这里必须同样受 omittedFields 门控。
@@ -664,6 +688,11 @@ function buildSessionResumeParams(
   },
   omittedFields: ReadonlySet<SessionResumeCompatField> = new Set(),
 ) {
+  const includeMcpServers = !omittedFields.has("mcpServers");
+  const includeMcpServersProvenance =
+    includeMcpServers &&
+    !omittedFields.has("mcpServersSource") &&
+    !omittedFields.has("mcpServersBase");
   return {
     sessionId: params.sessionId,
     workspace: buildWorkspaceRef(params),
@@ -671,8 +700,16 @@ function buildSessionResumeParams(
       ? { thoughtLevel: params.thoughtLevel }
       : {}),
     // 冷恢复 session 时 app-server 可能重新创建 runtime；MCP 同样需要随 resume 请求下发。
-    ...(params.mcpServers !== undefined && !omittedFields.has("mcpServers")
+    ...(params.mcpServers !== undefined && includeMcpServers
       ? { mcpServers: params.mcpServers }
+      : {}),
+    ...(params.mcpServersSource !== undefined && includeMcpServersProvenance
+      ? { mcpServersSource: params.mcpServersSource }
+      : {}),
+    ...(params.mcpServersSource === "directory" &&
+    params.mcpServersBase !== undefined &&
+    includeMcpServersProvenance
+      ? { mcpServersBase: params.mcpServersBase }
       : {}),
     // 工具面约束必须和 create 路径一致随 resume 下发，否则冷恢复重建 runtime 后会丢失 allow/deny
     // 隔离（CUA 会话会重新可见 Bash 等被禁工具）。旧 app-server 不认时经 omittedFields 降级。
@@ -1093,6 +1130,7 @@ export function createZCodeAgentService(
     idleTimeoutMs: options?.mcpStatusIdleTimeoutMs ?? MCP_STATUS_LANE_IDLE_TIMEOUT_MS,
   });
   const sessionEmitters = new Map<string, Emitter<ZCodeAgentServiceEvent>>();
+  const capabilitiesChangedRouter = createCapabilitiesChangedRouter();
   /**
    * 已经记过"首次发放官方身份头"审计日志的 (pluginId, mcpKey, workspaceKey)。
    *
@@ -1933,6 +1971,27 @@ export function createZCodeAgentService(
                 message: issue.message,
                 path: issue.path.join("."),
               })),
+            });
+          }
+          return;
+        }
+
+        if (message.method === zcodeProtocolNotifications.sessionCapabilitiesChanged) {
+          const parsed = zcodeSessionCapabilitiesChangedNotificationSchema.safeParse(
+            message.params,
+          );
+          if (parsed.success) {
+            // The client was wired with the routed workspace target. Keep that route intact
+            // instead of deriving a new target from the session id or broad workspace key.
+            capabilitiesChangedRouter.emit(workspace, parsed.data);
+          } else {
+            logger.warn(undefined, "丢弃无效 ZCode Protocol capability 状态通知", {
+              issues: parsed.error.issues.map((issue) => ({
+                code: issue.code,
+                message: issue.message,
+                path: issue.path.join("."),
+              })),
+              workspaceKey: resolveWorkspaceKey(workspace),
             });
           }
           return;
@@ -3186,6 +3245,7 @@ export function createZCodeAgentService(
       emitter.dispose();
     }
     sessionEmitters.clear();
+    capabilitiesChangedRouter.dispose();
     sessionRuntimePreferencesRequestEmitter.dispose();
     processResourceSampleEmitter.dispose();
     mcpTelemetryEmitter.dispose();
@@ -5583,6 +5643,9 @@ export function createZCodeAgentService(
 
     onDynamicToolExecResource() {
       return toolExecResourceEmitter.event;
+    },
+    onDynamicCapabilitiesChanged(params: ZCodeAgentWorkspaceTarget) {
+      return capabilitiesChangedRouter.on(params);
     },
     onDynamicMcpResourceSamples() {
       return mcpResourceSamplesEmitter.event;

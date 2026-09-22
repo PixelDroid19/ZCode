@@ -116,7 +116,8 @@ Comandos slash:
           pendingSecondary:
             "Completa el inicio de sesión en tu navegador. La autorización se detecta automáticamente.",
           primary: "BigModel Coding Plan",
-          secondary: "Abre el inicio de sesión en navegador; la autorización se detecta automáticamente.",
+          secondary:
+            "Abre el inicio de sesión en navegador; la autorización se detecta automáticamente.",
         },
         zaiApiKey: {
           inputPrimary: "Introduce la API Key de Z.AI Coding Plan",
@@ -232,6 +233,10 @@ Comandos slash:
         pending: "pendiente",
       },
       status: {
+        capabilitiesReloadFailed: (error) =>
+          error
+            ? `No se pudieron recargar las capacidades: ${error}`
+            : "No se pudieron recargar las capacidades.",
         last: "Última",
       },
       run: {

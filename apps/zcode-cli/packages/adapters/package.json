@@ -89,6 +89,18 @@
     "./tools": {
       "types": "./dist/tools/index.d.ts",
       "import": "./dist/tools/index.js"
+    },
+    "./live-tools": {
+      "types": "./dist/live-tools/index.d.ts",
+      "import": "./dist/live-tools/index.js"
+    },
+    "./capability-inputs": {
+      "types": "./dist/capability-inputs/index.d.ts",
+      "import": "./dist/capability-inputs/index.js"
+    },
+    "./directory-mcp": {
+      "types": "./dist/directory-mcp/index.d.ts",
+      "import": "./dist/directory-mcp/index.js"
     }
   },
   "scripts": {

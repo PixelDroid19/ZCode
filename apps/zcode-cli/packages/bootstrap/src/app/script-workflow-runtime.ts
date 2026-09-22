@@ -292,6 +292,7 @@ export class ScriptWorkflowRuntime {
       },
       sessionId: childSessionId,
     });
+    await this.deps.runtime.refreshCapabilities({ traceContext: childTraceContext });
     const childRuntime = createScriptWorkflowAgentRuntime({
       childSessionId,
       deps: this.deps,
@@ -377,6 +378,7 @@ export class ScriptWorkflowRuntime {
       throw error;
     } finally {
       unsubscribe?.();
+      await childRuntime.disposeCapabilities();
     }
   }
 

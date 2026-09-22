@@ -4,7 +4,7 @@ import type { ZCodeProtocolMcpServer } from "@zcode/shared";
 export function protocolMcpServersToRuntimeMcpConfig(
   servers: ZCodeProtocolMcpServer[] | undefined,
 ): { enabled: true; servers: Record<string, McpServerConfig> } | undefined {
-  if (!servers || servers.length === 0) {
+  if (!servers) {
     return undefined;
   }
 

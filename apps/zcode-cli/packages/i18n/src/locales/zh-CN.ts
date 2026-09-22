@@ -229,6 +229,8 @@ Slash Commands:
         pending: "进行中",
       },
       status: {
+        capabilitiesReloadFailed: (error) =>
+          error ? `无法重新加载能力：${error}` : "无法重新加载能力。",
         last: "最近",
       },
       run: {

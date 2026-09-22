@@ -16,6 +16,7 @@ import type {
 } from "@zcode/contracts";
 import { resolveDefaultSkillRoots, type SkillRootResolutionOptions } from "./roots.js";
 import { scanSkillFilesUnderRoot } from "./scan.js";
+export { resolveDefaultSkillRoots } from "./roots.js";
 
 const MAX_DESCRIPTION_LENGTH = 1024;
 const SAFE_FRONTMATTER_KEYS = new Set([
@@ -370,10 +371,7 @@ function readBlockScalar(
     line.trim().length === 0 ? "" : line.slice(indent ?? 0),
   );
   return {
-    value:
-      style === "folded"
-        ? foldBlockScalarLines(contentLines)
-        : contentLines.join("\n").trim(),
+    value: style === "folded" ? foldBlockScalarLines(contentLines) : contentLines.join("\n").trim(),
     nextIndex: index,
   };
 }

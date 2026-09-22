@@ -73,52 +73,59 @@ export async function executeTools(
   }));
   const traceContext = options?.traceContext ?? getCurrentTraceContext() ?? this.rootTraceContext;
   const events: SessionEvent[] = [];
+  // An adopted source may retire a port after the next model boundary. Keep this complete schedule
+  // on the snapshot that produced its tool contracts so an in-flight handler is never disconnected.
+  const releaseCapabilities = this.acquireCapabilitiesLease();
 
-  this.logger?.debug("executeTools: executing schedule", {
-    toolCalls: executableCalls.length,
-    parallelGroups: schedule.parallelGroups.length,
-  });
+  try {
+    this.logger?.debug("executeTools: executing schedule", {
+      toolCalls: executableCalls.length,
+      parallelGroups: schedule.parallelGroups.length,
+    });
 
-  const generator = this.executor.executeSchedule(executableCalls, schedule, {
-    automationTurn: options?.automationTurn,
-    offPeakTurn: options?.offPeakTurn,
-    signal: options?.signal,
-    traceContext,
-    subagentModelOverride: options?.subagentModelOverride,
-    model: options?.model,
-  });
-  let results: ToolExecutionResult[] = [];
+    const generator = this.executor.executeSchedule(executableCalls, schedule, {
+      automationTurn: options?.automationTurn,
+      offPeakTurn: options?.offPeakTurn,
+      signal: options?.signal,
+      traceContext,
+      subagentModelOverride: options?.subagentModelOverride,
+      model: options?.model,
+    });
+    let results: ToolExecutionResult[] = [];
 
-  while (true) {
-    const next = await generator.next();
-    if (next.done) {
-      results = next.value;
-      break;
+    while (true) {
+      const next = await generator.next();
+      if (next.done) {
+        results = next.value;
+        break;
+      }
+
+      if (next.value.type === "batch_start") {
+        await options?.onBatchStart?.(next.value.toolCallIds);
+        continue;
+      }
+
+      if (next.value.type === "batch_complete") {
+        const batchResults = next.value.results;
+        const batchCompleteEvent = this.createEvent(
+          SessionEventType.ToolBatchComplete,
+          {
+            toolCallIds: batchResults.map((result) => result.toolCallId as ToolCallId),
+            successCount: batchResults.filter((result) => result.success).length,
+            errorCount: batchResults.filter((result) => !result.success).length,
+          },
+          traceContext,
+        );
+        await this.appendEvent(batchCompleteEvent, traceContext);
+        events.push(batchCompleteEvent);
+      }
     }
 
-    if (next.value.type === "batch_start") {
-      await options?.onBatchStart?.(next.value.toolCallIds);
-      continue;
-    }
-
-    if (next.value.type === "batch_complete") {
-      const batchResults = next.value.results;
-      const batchCompleteEvent = this.createEvent(
-        SessionEventType.ToolBatchComplete,
-        {
-          toolCallIds: batchResults.map((result) => result.toolCallId as ToolCallId),
-          successCount: batchResults.filter((result) => result.success).length,
-          errorCount: batchResults.filter((result) => !result.success).length,
-        },
-        traceContext,
-      );
-      await this.appendEvent(batchCompleteEvent, traceContext);
-      events.push(batchCompleteEvent);
-    }
+    this.logger?.debug("executeTools: completed", { resultCount: results.length });
+    return { results, events };
+  } finally {
+    await releaseCapabilities();
   }
-
-  this.logger?.debug("executeTools: completed", { resultCount: results.length });
-  return { results, events };
 }
 
 export async function emitToolScheduledEvents(

@@ -109,6 +109,7 @@ export function AppView(props: {
   );
   const mcpStatus = useMcpSidebarStatus(
     props.loginRequired ? undefined : props.options.listMcpServers,
+    props.loginRequired ? undefined : props.options.readCapabilitiesStatus,
   );
   const transcriptMessages = props.liveModelText
     ? [

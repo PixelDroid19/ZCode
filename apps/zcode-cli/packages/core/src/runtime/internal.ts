@@ -56,6 +56,7 @@ import type { AgentRuntimeHookMethods } from "./internal-hook-methods.js";
 import type { ProjectMemoryExtractionScheduler } from "./helpers/project-memory-extraction.js";
 import type { RuntimeTelemetryFacade } from "../telemetry/runtime-telemetry.js";
 import type { WorkspaceHookRuntimeAdmissionPort } from "../hooks/workspace-hook-runtime-admission.js";
+import type { RuntimeCapabilityController, RuntimeCapabilitySource } from "./live-capabilities.js";
 
 export interface AgentRuntimeInternal
   extends AgentRuntimeCoreMethods, AgentRuntimeTurnMethods, AgentRuntimeHookMethods {
@@ -74,6 +75,7 @@ export interface AgentRuntimeInternal
   now: () => Date;
   isRemoteWorkspace: () => boolean;
   registry: ToolRegistry;
+  builtInToolNames: Set<string>;
   executor: ToolExecutor;
   hookRunner?: HookRunner;
   workspaceHookAdmission?: WorkspaceHookRuntimeAdmissionPort;
@@ -87,6 +89,8 @@ export interface AgentRuntimeInternal
   readFileState: ReadFileStateMap;
   cachedTools: ModelToolContract[] | null;
   contextBuilder: ContextBuilder | null;
+  /** Revision whose skills/instructions have been materialized into the current context prefix. */
+  capabilityContextRevision?: string;
   contextInitialized: boolean;
   contextSourceSnapshot?: ContextSourceSnapshot;
   latestContextBuildResult?: ContextBuildResult;
@@ -95,6 +99,10 @@ export interface AgentRuntimeInternal
   memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   contextSourcePort?: ContextSourcePort;
   skillPort?: SkillPort;
+  capabilityInstructions?: string;
+  capabilitySource?: RuntimeCapabilitySource;
+  capabilityController?: RuntimeCapabilityController;
+  capabilityDisposePromise?: Promise<void>;
   mcpPort?: McpPort;
   mcpStartupPromise?: Promise<McpConnectionSnapshot>;
   residencyBlockingWorkCount: number;

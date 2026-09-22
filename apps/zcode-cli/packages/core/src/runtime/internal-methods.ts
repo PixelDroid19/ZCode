@@ -35,6 +35,12 @@ import type {
   ExecutionShellSelection,
 } from "./deps.js";
 import type { BackgroundResultOriginMeta, ContextUsageBreakdownItem } from "@zcode/contracts";
+import type { PluginReferenceCatalog } from "@zcode/contracts";
+import type {
+  InheritedRuntimeCapabilitySourceOptions,
+  RuntimeCapabilitiesStatus,
+  RuntimeCapabilitySource,
+} from "./live-capabilities.js";
 import type { RuntimeCommand, RuntimeCommandId } from "./command-queue.js";
 import type { RuntimeMessageEntry } from "../agent/message-history.js";
 import type {
@@ -249,6 +255,24 @@ export interface AgentRuntimeCoreMethods {
   invalidateToolCache(): void;
   getToolRegistry(): ToolRegistry;
   getToolExecutor(): ToolExecutor;
+  getCapabilitiesStatus(): RuntimeCapabilitiesStatus;
+  refreshCapabilities(options?: {
+    abortSignal?: AbortSignal;
+    traceContext?: TraceContext;
+  }): Promise<RuntimeCapabilitiesStatus>;
+  subscribeCapabilities(listener: (status: RuntimeCapabilitiesStatus) => void): () => void;
+  getPluginReferenceCatalog(): PluginReferenceCatalog | undefined;
+  createInheritedCapabilitySource(
+    options?: InheritedRuntimeCapabilitySourceOptions,
+  ): RuntimeCapabilitySource | undefined;
+  disposeCapabilities(): Promise<void>;
+  refreshCapabilitiesAtModelBoundary(options: {
+    abortSignal?: AbortSignal;
+    model?: Model;
+    traceContext: TraceContext;
+    turnRequestEntries?: readonly RuntimeMessageEntry[];
+  }): Promise<readonly RuntimeMessageEntry[] | undefined>;
+  acquireCapabilitiesLease(): () => Promise<void>;
   subscribeEvents(sink: SessionEventSink): () => void;
   getContextBuilder(): ContextBuilder;
   ensureContextInitialized(traceContext: TraceContext, model?: Model): Promise<void>;

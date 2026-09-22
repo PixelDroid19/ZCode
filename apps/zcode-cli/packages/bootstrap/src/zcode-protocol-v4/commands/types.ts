@@ -229,6 +229,8 @@ export interface V4CommandCoreHost {
   createSessionRecord?(params: {
     workspaceId: string;
     mcpServers?: CommandPayloadMap["createSession"]["mcpServers"];
+    mcpServersSource?: CommandPayloadMap["createSession"]["mcpServersSource"];
+    mcpServersBase?: CommandPayloadMap["createSession"]["mcpServersBase"];
     /** host 判定的 Off-Peak 工具面门禁；缺省不注册工具。 */
     offPeakToolEnabled?: boolean;
     /**

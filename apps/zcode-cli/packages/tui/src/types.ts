@@ -1,5 +1,5 @@
 import type { WorkflowRunProgressEnvelope } from "@zcode/shared/zcode-protocol-v4";
-import type { ModelSelection, ZCodeModelOption } from "@zcode/shared";
+import type { ModelSelection, ZCodeCapabilitiesStatus, ZCodeModelOption } from "@zcode/shared";
 import type {
   CollaborationMode,
   InputDelivery,
@@ -274,6 +274,9 @@ export type TuiGetMainSessionId = () => string | undefined;
 
 export type TuiListMcpServers = () => Promise<Record<string, McpServerStatus>>;
 
+/** Runtime-owned capability state projected for a lightweight sidebar reload notice. */
+export type TuiReadCapabilitiesStatus = () => Promise<ZCodeCapabilitiesStatus | undefined>;
+
 export type TuiSlashCommandSuggestion = {
   aliases?: readonly string[];
   name: string;
@@ -319,6 +322,7 @@ export type TuiOptions = {
   readSubagentTranscript?: TuiReadSubagentTranscript;
   listWorkspacePathSuggestions?: TuiListWorkspacePathSuggestions;
   listMcpServers?: TuiListMcpServers;
+  readCapabilitiesStatus?: TuiReadCapabilitiesStatus;
   listWorkflowRuns?: TuiListWorkflowRuns;
   replayWorkflowRuns?: TuiReplayWorkflowRuns;
   getMainSessionId?: TuiGetMainSessionId;
