@@ -217,6 +217,8 @@ export interface AgentRuntimeCoreApi {
     traceContext?: TraceContext;
   }): Promise<RuntimeCapabilitiesStatus>;
   subscribeCapabilities(listener: (status: RuntimeCapabilitiesStatus) => void): () => void;
+  /** Pins the adopted generation for asynchronous use; always await release in a finally block. */
+  acquireCapabilitiesLease(): () => Promise<void>;
   /** A defensive copy of the catalog adopted with the current capability revision. */
   getPluginReferenceCatalog(): PluginReferenceCatalog | undefined;
   /** Creates an immutable, leased source for a child runtime that inherits the current snapshot. */

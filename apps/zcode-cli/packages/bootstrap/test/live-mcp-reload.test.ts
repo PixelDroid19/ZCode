@@ -68,6 +68,7 @@ test(
         runtime: {
           config: { workspaceIdentity: "mcp-reload-workspace" },
           refreshCapabilities: async () => undefined,
+          acquireCapabilitiesLease: () => async () => undefined,
         },
         getLiveMcpPort: () => second.mcp!.port,
         getLiveMcpRevision: () => "script-two",

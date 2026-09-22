@@ -48,21 +48,29 @@ export function createSessionOperations(
     },
     connectMcpServer: async (name) => {
       await deps.runtime.refreshCapabilities({ traceContext: deps.traceContext });
-      const config = (deps.getLiveMcpServers?.() ?? deps.configuredMcpServers)[name];
-      if (!config) {
-        throw new Error(`MCP server is not configured: ${name}`);
+      // refresh 后可能正好发布下一代；先租用当前代，保证读取到的端口在连接结束前仍有效。
+      const releaseCapabilities = deps.runtime.acquireCapabilitiesLease();
+      try {
+        const config = (deps.getLiveMcpServers?.() ?? deps.configuredMcpServers)[name];
+        if (!config) {
+          throw new Error(`MCP server is not configured: ${name}`);
+        }
+        const mcpPort = deps.getLiveMcpPort ? deps.getLiveMcpPort() : deps.mcpPort;
+        if (!mcpPort) {
+          throw new Error("MCP is disabled");
+        }
+        return await mcpPort.connectServer(name, config, {
+          trace: deps.traceContext,
+          workingDirectory: deps.workingDirectory,
+          // 重连沿用已发布代际及远端身份，不能把同路径 workspace 合并到无版本 lease。
+          workspaceIdentity: deps.workspaceIdentity?.trim() || deps.workingDirectory,
+          capabilityRevision: deps.getLiveMcpRevision?.(),
+          // 失败 lease 仍可能在 pool grace 窗口内；手动连接必须探测并重试缓存 entry。
+          revalidate: true,
+        });
+      } finally {
+        await releaseCapabilities();
       }
-      const mcpPort = deps.getLiveMcpPort ? deps.getLiveMcpPort() : deps.mcpPort;
-      if (!mcpPort) {
-        throw new Error("MCP is disabled");
-      }
-      return mcpPort.connectServer(name, config, {
-        trace: deps.traceContext,
-        workingDirectory: deps.workingDirectory,
-        // 重连沿用已发布代际及远端身份，不能把同路径 workspace 合并到无版本 lease。
-        workspaceIdentity: deps.workspaceIdentity?.trim() || deps.workingDirectory,
-        capabilityRevision: deps.getLiveMcpRevision?.(),
-      });
     },
     readBackgroundBashOutput: (workId, sessionId) =>
       deps.runtime.readBackgroundBashOutput(workId, sessionId),
