@@ -43,6 +43,66 @@ const memorySchema = z.object({
   use: z.boolean().optional(),
 });
 
+export const DIRECTORY_MCP_INPUT_LIMITS = Object.freeze({
+  fileBytes: 1024 * 1024,
+  mapEntries: 32,
+  serverNameCodeUnits: 128,
+  serverValueBytes: 16 * 1024,
+  servers: 64,
+  stringBytes: 4 * 1024,
+  stdioArguments: 64,
+});
+
+const mcpStringSchema = z.string().superRefine((value, context) => {
+  if (Buffer.byteLength(value, "utf8") > DIRECTORY_MCP_INPUT_LIMITS.stringBytes) {
+    context.addIssue({
+      code: "custom",
+      message: `MCP strings may not exceed ${DIRECTORY_MCP_INPUT_LIMITS.stringBytes} UTF-8 bytes`,
+    });
+  }
+});
+
+const nonEmptyMcpStringSchema = z
+  .string()
+  .min(1)
+  .superRefine((value, context) => {
+    if (Buffer.byteLength(value, "utf8") > DIRECTORY_MCP_INPUT_LIMITS.stringBytes) {
+      context.addIssue({
+        code: "custom",
+        message: `MCP strings may not exceed ${DIRECTORY_MCP_INPUT_LIMITS.stringBytes} UTF-8 bytes`,
+      });
+    }
+  });
+
+const mcpStringRecordSchema = z
+  .record(mcpStringSchema, mcpStringSchema)
+  .superRefine((value, context) => {
+    if (Object.keys(value).length > DIRECTORY_MCP_INPUT_LIMITS.mapEntries) {
+      context.addIssue({
+        code: "custom",
+        message: `MCP maps may contain at most ${DIRECTORY_MCP_INPUT_LIMITS.mapEntries} entries`,
+      });
+    }
+  });
+
+const mcpServerNameSchema = z.string().superRefine((value, context) => {
+  if (value.length > DIRECTORY_MCP_INPUT_LIMITS.serverNameCodeUnits) {
+    context.addIssue({
+      code: "custom",
+      message: `MCP server names may not exceed ${DIRECTORY_MCP_INPUT_LIMITS.serverNameCodeUnits} characters`,
+    });
+  }
+});
+
+const mcpArgumentsSchema = z.array(mcpStringSchema).superRefine((value, context) => {
+  if (value.length > DIRECTORY_MCP_INPUT_LIMITS.stdioArguments) {
+    context.addIssue({
+      code: "custom",
+      message: `MCP stdio args may contain at most ${DIRECTORY_MCP_INPUT_LIMITS.stdioArguments} strings`,
+    });
+  }
+});
+
 const mcpServerBaseSchema = {
   // 设置页和 MCP adapter 已支持协议选择；配置入口漏掉该字段会因 strict 校验丢弃整个 server。
   protocolVersion: z.enum(["auto", "legacy", "2026-07-28"]).optional(),
@@ -54,20 +114,20 @@ const mcpOAuthSchema = z.union([
   z
     .object({
       type: z.literal("client_credentials"),
-      clientId: z.string().min(1),
-      clientSecret: z.string().min(1),
-      clientName: z.string().min(1).optional(),
-      scope: z.string().optional(),
+      clientId: nonEmptyMcpStringSchema,
+      clientSecret: nonEmptyMcpStringSchema,
+      clientName: nonEmptyMcpStringSchema.optional(),
+      scope: mcpStringSchema.optional(),
     })
     .strict(),
   z
     .object({
       type: z.literal("authorization_code"),
-      clientId: z.string().min(1).optional(),
-      clientSecret: z.string().min(1).optional(),
-      clientName: z.string().min(1).optional(),
-      redirectPath: z.string().min(1).optional(),
-      scope: z.string().optional(),
+      clientId: nonEmptyMcpStringSchema.optional(),
+      clientSecret: nonEmptyMcpStringSchema.optional(),
+      clientName: nonEmptyMcpStringSchema.optional(),
+      redirectPath: nonEmptyMcpStringSchema.optional(),
+      scope: mcpStringSchema.optional(),
     })
     .strict(),
 ]);
@@ -76,10 +136,10 @@ const mcpStdioServerSchema = z
   .object({
     ...mcpServerBaseSchema,
     type: z.literal("stdio"),
-    command: z.string().min(1),
-    args: z.array(z.string()).optional(),
-    cwd: z.string().min(1).optional(),
-    env: stringRecordSchema.optional(),
+    command: nonEmptyMcpStringSchema,
+    args: mcpArgumentsSchema.optional(),
+    cwd: nonEmptyMcpStringSchema.optional(),
+    env: mcpStringRecordSchema.optional(),
   })
   .strict();
 
@@ -87,8 +147,8 @@ const mcpHttpServerSchema = z
   .object({
     ...mcpServerBaseSchema,
     type: z.literal("http"),
-    url: z.string().min(1),
-    headers: stringRecordSchema.optional(),
+    url: nonEmptyMcpStringSchema,
+    headers: mcpStringRecordSchema.optional(),
     oauth: mcpOAuthSchema.optional(),
   })
   .strict();
@@ -97,19 +157,39 @@ const mcpSseServerSchema = z
   .object({
     ...mcpServerBaseSchema,
     type: z.literal("sse"),
-    url: z.string().min(1),
-    headers: stringRecordSchema.optional(),
+    url: nonEmptyMcpStringSchema,
+    headers: mcpStringRecordSchema.optional(),
     oauth: mcpOAuthSchema.optional(),
   })
   .strict();
 
-const mcpServerSchema = z.preprocess(
-  normalizeMcpServerConfigInput,
-  z.discriminatedUnion("type", [mcpStdioServerSchema, mcpHttpServerSchema, mcpSseServerSchema]),
-);
+const parsedMcpServerSchema = z
+  .discriminatedUnion("type", [mcpStdioServerSchema, mcpHttpServerSchema, mcpSseServerSchema])
+  .superRefine((server, context) => {
+    const serialized = JSON.stringify(server);
+    if (Buffer.byteLength(serialized, "utf8") > DIRECTORY_MCP_INPUT_LIMITS.serverValueBytes) {
+      context.addIssue({
+        code: "custom",
+        message: `MCP server values may not exceed ${DIRECTORY_MCP_INPUT_LIMITS.serverValueBytes} serialized UTF-8 bytes`,
+      });
+    }
+  });
+
+const mcpServerSchema = z.preprocess(normalizeMcpServerConfigInput, parsedMcpServerSchema);
+
+const mcpServerRecordSchema = z
+  .record(mcpServerNameSchema, mcpServerSchema)
+  .superRefine((servers, context) => {
+    if (Object.keys(servers).length > DIRECTORY_MCP_INPUT_LIMITS.servers) {
+      context.addIssue({
+        code: "custom",
+        message: `MCP config files may contain at most ${DIRECTORY_MCP_INPUT_LIMITS.servers} servers`,
+      });
+    }
+  });
 
 const mcpSchema = z.object({
-  servers: z.record(z.string(), mcpServerSchema).optional(),
+  servers: mcpServerRecordSchema.optional(),
 });
 
 const pluginOptionValueSchema = z.union([z.string(), z.number(), z.boolean()]);

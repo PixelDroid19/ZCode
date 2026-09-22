@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { McpServerConfig } from "@zcode/contracts";
-import { ZCodeConfigFileSchema } from "../config/schema.js";
+import { DIRECTORY_MCP_INPUT_LIMITS, ZCodeConfigFileSchema } from "../config/schema.js";
 
 export interface LoadDirectoryMcpServersInput {
   /** Absolute or relative home directory whose configured MCP files are read. */
@@ -69,6 +69,12 @@ export async function loadDirectoryMcpServers(
   const userServers = await readPreferredScope("user", paths.user);
   const workspaceServers = await readPreferredScope("workspace", paths.workspace);
   const merged = { ...userServers, ...workspaceServers };
+  if (Object.keys(merged).length > DIRECTORY_MCP_INPUT_LIMITS.servers) {
+    throw new DirectoryMcpConfigurationError(
+      "invalid_config",
+      `Combined directory MCP config may contain at most ${DIRECTORY_MCP_INPUT_LIMITS.servers} servers`,
+    );
+  }
 
   const servers = Object.fromEntries(
     Object.entries(merged)
@@ -156,8 +162,9 @@ async function readDirectoryMcpText(
   source: DirectoryMcpSource,
   scope: DirectoryMcpScope,
 ): Promise<string | undefined> {
+  let file;
   try {
-    return await readFile(filePath, "utf8");
+    file = await open(filePath, "r");
   } catch (cause) {
     if (isErrno(cause, "ENOENT")) {
       return undefined;
@@ -168,6 +175,46 @@ async function readDirectoryMcpText(
       { cause, path: filePath },
     );
   }
+
+  let text: string | undefined;
+  let failure: unknown;
+  try {
+    // readFile 会先把完整配置载入内存再检查长度；这里只读上限加一个溢出字节，超限在 JSON.parse 前拒绝。
+    const buffer = Buffer.allocUnsafe(DIRECTORY_MCP_INPUT_LIMITS.fileBytes + 1);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const result = await file.read(buffer, bytesRead, buffer.length - bytesRead, null);
+      if (result.bytesRead === 0) break;
+      bytesRead += result.bytesRead;
+    }
+    if (bytesRead > DIRECTORY_MCP_INPUT_LIMITS.fileBytes) {
+      failure = invalidConfig(
+        filePath,
+        `MCP config file exceeds ${DIRECTORY_MCP_INPUT_LIMITS.fileBytes} UTF-8 bytes`,
+        new Error("Directory MCP input byte limit exceeded"),
+      );
+    } else {
+      text = buffer.subarray(0, bytesRead).toString("utf8");
+    }
+  } catch (cause) {
+    failure = cause;
+  }
+
+  try {
+    await file.close();
+  } catch (cause) {
+    failure ??= cause;
+  }
+
+  if (failure instanceof DirectoryMcpConfigurationError) throw failure;
+  if (failure !== undefined) {
+    throw new DirectoryMcpConfigurationError(
+      "unreadable_config",
+      `Unable to read ${scope} ${source} MCP config: ${filePath}`,
+      { cause: failure, path: filePath },
+    );
+  }
+  return text;
 }
 
 function toZCodeConfigShape(
