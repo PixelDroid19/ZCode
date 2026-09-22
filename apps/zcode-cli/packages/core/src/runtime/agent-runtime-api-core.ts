@@ -1,4 +1,4 @@
-import type { PluginReferenceCatalog } from "@zcode/contracts";
+import type { MemoryStorePort, PluginReferenceCatalog } from "@zcode/contracts";
 import type {
   CollaborationMode,
   ContextBuilder,
@@ -236,6 +236,11 @@ export interface AgentRuntimeCoreApi {
    * `methods/config.ts` 的实现注释。
    */
   getSessionEventStore(): SessionEventStorePort;
+  /** Shares the authoritative profile memory store and initial project root with child runtimes. */
+  getExperienceMemoryRuntimeContext(): {
+    memoryStore?: MemoryStorePort;
+    workspaceRoot: string;
+  };
   /**
    * 外部子 runtime 的接缝（二）：把子会话的原始事件扇出给本 runtime 的外部 sink 集
    * （保留子 sessionId、只通知不 append）。**必须在子 runtime 构造期装成它的

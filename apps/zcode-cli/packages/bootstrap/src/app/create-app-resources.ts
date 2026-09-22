@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { createNodeToolArtifactStore } from "@zcode/adapters/storage";
+import { createNodeToolArtifactStore, SqliteMemoryStore } from "@zcode/adapters/storage";
 import { resolvePath } from "@zcode/adapters/config";
 import { createNodeExecutionAdapter } from "@zcode/adapters/exec";
 import { createNodeFileSystemAdapter } from "@zcode/adapters/fs";
@@ -300,6 +300,12 @@ export async function createAppResources(input: CreateAppResourcesInput) {
     logger,
     runtimeConfig,
   });
+  const memoryStore =
+    runtimeConfig.memory?.enabled === false || runtimeConfig.memory?.use === false
+      ? undefined
+      : await SqliteMemoryStore.open({
+          dbPath: join(cliStorageRoot, "memories", "experience.sqlite"),
+        });
   return {
     artifactStore,
     cliStorageRoot,
@@ -310,6 +316,7 @@ export async function createAppResources(input: CreateAppResourcesInput) {
     imageProcessorPort,
     inputHistoryStore,
     localSettingStore,
+    memoryStore,
     mcpPort,
     modelIoDir,
     ownsExecutionPort,

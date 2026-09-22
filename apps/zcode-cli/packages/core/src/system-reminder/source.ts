@@ -45,6 +45,7 @@ export const SYSTEM_REMINDER_PER_REQUEST_SOURCES = [
   "output_style",
   "date_change",
   "referenced_session_context",
+  "experience_memory",
   "model_anomaly",
   "prompt_attachment",
   "diagnostics",
@@ -100,6 +101,7 @@ const SYSTEM_REMINDER_DESCRIPTORS: Record<SystemReminderSource, DescriptorShape>
     true,
     "sr.referenced_session_context",
   ),
+  experience_memory: descriptor("current_turn", "per_current_turn", true, "sr.experience_memory"),
   // Plugin 对话引用：当轮生成后按
   // model-only synthetic notice 固化，后续只追加、不改写；冷恢复按原文重建以保持缓存前缀。
   plugin_reference: descriptor("current_turn", "per_current_turn", true, "sr.plugin_reference"),

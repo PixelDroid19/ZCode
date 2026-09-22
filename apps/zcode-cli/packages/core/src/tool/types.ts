@@ -15,6 +15,8 @@ import type {
   PdfDocumentPort,
   ModelMessageContent,
   ModelContentProtection,
+  MemoryAccess,
+  MemoryStorePort,
   Model,
   CoordinatorResponsePort,
   DynamicWorkflowRunPort,
@@ -188,6 +190,10 @@ export interface ToolExecutionContext {
   clientMode?: "desktop-continuous" | "web-remote-replayable";
   deliveryKind?: "desktop-continuous" | "web-remote-replayable";
   memoryRoot?: string;
+  /** Structured shared experience store; absent means the Memory tool is unavailable. */
+  memoryStore?: MemoryStorePort;
+  /** Runtime-derived identity for this call, never accepted from tool input. */
+  memoryAccess?: MemoryAccess;
   runtimeScope?: ToolRuntimeScope;
   providerVisibleToolNames?: readonly string[];
   sessionId: SessionId;
@@ -402,6 +408,12 @@ export interface ToolExecutionResult {
   toolName: string;
   success: boolean;
   output: unknown;
+  /** Persisted execution facts for validation; never included in model-visible tool output. */
+  executionOutcome?: {
+    toolSuccess: boolean;
+    exitCode?: number | null;
+    aborted?: boolean;
+  };
   turnControl?: ToolExecutionTurnControl;
   followUpUserInput?: ToolExecutionFollowUpUserInput;
   display?: ToolResultDisplayPayload;

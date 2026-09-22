@@ -19,6 +19,7 @@ import type {
   StableForkTargetMetadata,
   WorkspaceHookBundleSnapshot,
   WorkspaceId,
+  MemoryStorePort,
 } from "@zcode/contracts";
 import type { ZCodeProviderAccountAccess } from "@zcode/shared";
 import type { EffectiveModelSelectionResult } from "@zcode/shared/model-selection";
@@ -381,6 +382,10 @@ export interface AgentRuntimeDeps {
   now?: () => Date;
   isRemoteWorkspace?: () => boolean;
   memoryRoot?: string;
+  /** Shared profile-owned experience store; runtime gates exposure with memory config. */
+  memoryStore?: MemoryStorePort;
+  /** Stable initial workspace root for child runtimes whose working directory may differ. */
+  memoryWorkspaceRoot?: string;
 }
 
 export interface RuntimeModelFactoryInput {

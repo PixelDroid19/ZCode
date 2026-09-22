@@ -26,6 +26,7 @@ import type { AgentRuntimeConfig, ActiveTurnInfo } from "../types.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { cloneModelSelection } from "../model-selection.js";
 import { applyRuntimeExecutionState } from "../execution-state.js";
+import { isStructuredMemoryEnabled } from "../helpers/project-memory.js";
 
 import { orderProviderVisibleToolContracts } from "../../tool/provider-visible-order.js";
 import { projectToolModelContract } from "../../tool/model-contract.js";
@@ -176,6 +177,16 @@ export function subscribeEvents(this: AgentRuntimeInternal, sink: SessionEventSi
  */
 export function getSessionEventStore(this: AgentRuntimeInternal): SessionEventStorePort {
   return this.eventStore;
+}
+
+export function getExperienceMemoryRuntimeContext(this: AgentRuntimeInternal): {
+  memoryStore?: import("@zcode/contracts").MemoryStorePort;
+  workspaceRoot: string;
+} {
+  return {
+    ...(isStructuredMemoryEnabled(this) ? { memoryStore: this.memoryStore } : {}),
+    workspaceRoot: this.memoryWorkspaceRoot ?? this.workspaceRoot,
+  };
 }
 
 /**

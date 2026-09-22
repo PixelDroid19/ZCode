@@ -285,6 +285,7 @@ function createWorkflowChildRuntime(
     workflowKind: string;
   },
 ): AgentRuntime {
+  const memoryContext = deps.runtime.getExperienceMemoryRuntimeContext();
   const capabilitySource = deps.runtime.createInheritedCapabilitySource({
     inheritRuntimeConfig: true,
   });
@@ -334,6 +335,8 @@ function createWorkflowChildRuntime(
         imageProcessorPort: deps.imageProcessorPort,
         pdfDocumentPort: deps.pdfDocumentPort,
         artifactStore: deps.artifactStore,
+        memoryStore: memoryContext.memoryStore,
+        memoryWorkspaceRoot: memoryContext.workspaceRoot,
         contextSourcePort:
           deps.appOptions.contextSourcePort ??
           createNodeContextSourceAdapter({ env: deps.appOptions.env }),

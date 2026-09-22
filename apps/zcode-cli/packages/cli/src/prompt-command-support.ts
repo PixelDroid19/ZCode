@@ -133,6 +133,9 @@ export async function runPromptCommandCenterCommand(
   if (options.memoryBench) {
     await app.runtime.drainMemoryExtractions(null);
     abortSignal.throwIfAborted();
+  } else if (!result.selection) {
+    await app.runtime.drainMemoryExtractions();
+    abortSignal.throwIfAborted();
   }
 
   if (wantsJsonSummary(options)) {

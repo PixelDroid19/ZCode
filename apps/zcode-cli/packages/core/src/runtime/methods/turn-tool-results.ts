@@ -107,6 +107,7 @@ export async function persistTurnToolResults(
                   ...mcpToolPartMetadata(
                     this.registry.getMetadata(result.toolName)?.mcpPresentation,
                   ),
+                  ...(result.executionOutcome ? { executionOutcome: result.executionOutcome } : {}),
                   ...(typeof result.modelContent === "string"
                     ? { modelContent: result.modelContent }
                     : {}),

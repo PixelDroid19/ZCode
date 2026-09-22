@@ -16,6 +16,7 @@ import {
 } from "../helpers/index.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import type { TurnResult } from "../types.js";
+import { refreshExperienceMemoryRecall } from "../helpers/experience-memory-recall.js";
 import { maybeStartSessionTitleGeneration } from "./session-title.js";
 import type {
   RegularTurnLifecycleContext,
@@ -109,6 +110,14 @@ export async function prepareRegularTurnLoop(
   });
   logResolvedTurnAttachments(runtime.logger, context.turnTraceContext, resolvedAttachments);
   await hydrateSharedContextIfNeeded(runtime, context);
+  await refreshExperienceMemoryRecall(runtime, {
+    inputSource: context.options?.inputSource,
+    inputVisibility: context.options?.inputVisibility === "model-only" ? "model-only" : "visible",
+    prompt: context.input,
+    signal: context.turnAbortSignal,
+    skipInputRecord: context.options?.skipInputRecord,
+    traceContext: context.turnTraceContext,
+  });
   await runtime.persistPendingModelChangeTimeline(context.turnTraceContext);
   await persistTurnUserInput(runtime, context, resolvedAttachments, state);
   await injectPluginReminder(runtime, context);

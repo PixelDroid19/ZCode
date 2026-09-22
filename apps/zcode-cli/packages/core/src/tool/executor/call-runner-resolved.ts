@@ -20,7 +20,9 @@ import type {
   ToolExecutionResult,
 } from "../types.js";
 import type { BackgroundTaskTracker } from "./background-tasks.js";
-import { errorCategoryForToolError, resolveModelOutputEntry } from "./call-runner-model-output.js";
+import { resolveModelOutputEntry } from "./call-runner-model-output.js";
+import { finishToolCallFailure } from "./call-runner-failure.js";
+import { failedBashExecutionOutcome, readBashExecutionOutcome } from "./bash-execution-outcome.js";
 import {
   createErrorResult,
   createToolHandlerFailureError,
@@ -103,10 +105,12 @@ export async function executeResolvedToolCall(
           await deps.emitEvent(event);
         };
   let readFileStateMetadata: ToolExecutionResult["readFileStateMetadata"];
+  let bashExecutionOutcome: ToolExecutionResult["executionOutcome"];
   let failureStage: "handler" | "serialize" | "post_hook" = "handler";
   let skillTelemetryMetadata: SkillTelemetryMetadata | undefined;
 
   try {
+    const suppliedMemoryAccess = deps.getMemoryAccess?.();
     const bashShellSelection = deps.getBashShellSelection?.() ?? deps.bashShellSelection;
     const embeddedSearchDecision = resolveEmbeddedSearchBranchCapability({
       bashAvailable: deps.registry.has("Bash"),
@@ -176,6 +180,14 @@ export async function executeResolvedToolCall(
       clientMode: deps.clientMode,
       deliveryKind: deps.deliveryKind,
       memoryRoot: deps.getMemoryRoot?.(),
+      memoryStore: deps.memoryStore,
+      memoryAccess: suppliedMemoryAccess
+        ? {
+            ...suppliedMemoryAccess,
+            traceContext,
+            signal: executionAbortController.signal,
+          }
+        : undefined,
       runtimeScope: deps.runtimeScope,
       providerVisibleToolNames: deps.registry
         .list()
@@ -192,6 +204,13 @@ export async function executeResolvedToolCall(
       executionAbortController,
       entry,
     );
+    if (canonicalToolCall.name === "Bash") {
+      bashExecutionOutcome = readBashExecutionOutcome(
+        output,
+        true,
+        executionAbortController.signal,
+      );
+    }
     const durationMs = Date.now() - startTime;
     if (isToolHandlerFailure(output)) {
       // handler 用返回值表达可预期业务失败；这里只转换到既有异常控制流，
@@ -261,6 +280,7 @@ export async function executeResolvedToolCall(
         toolName: canonicalToolCall.name,
         success: true,
         output,
+        ...(bashExecutionOutcome ? { executionOutcome: bashExecutionOutcome } : {}),
         display,
         modelContent: finalModelContent,
         ...(readFileStateMetadata ? { readFileStateMetadata } : {}),
@@ -316,6 +336,14 @@ export async function executeResolvedToolCall(
       error instanceof Error ? error : new Error(String(error)),
       durationMs,
     );
+    if (canonicalToolCall.name === "Bash") {
+      const aborted =
+        executionAbortController.signal.aborted ||
+        options?.signal?.aborted === true ||
+        result.error?.type === CoreErrorType.ToolCancelled ||
+        (error instanceof Error && error.name === "AbortError");
+      result.executionOutcome = failedBashExecutionOutcome(bashExecutionOutcome, aborted);
+    }
     const baseModelContent = result.error
       ? isToolHandlerFailureError(error) && typeof result.modelContent === "string"
         ? result.modelContent
@@ -351,31 +379,17 @@ export async function executeResolvedToolCall(
       skillTelemetryMetadata,
     );
 
-    deps.logger?.error(
-      "Tool call failed",
-      error instanceof Error ? error : new Error(String(error)),
-      {
-        ...traceContextToLogContext(traceContext),
-        durationMs,
-        event: "tool.call.failed",
-        module: "core.tool.executor",
-        status: "failed",
-        toolCallId: canonicalToolCall.id,
-        toolName: canonicalToolCall.name,
-      },
-    );
-
-    if (options?.signal?.aborted || result.error?.type === CoreErrorType.ToolCancelled) {
-      telemetry?.finishCancelled("abort_signal");
-    } else {
-      telemetry?.finishFailed(
-        failureStage,
-        errorCategoryForToolError(result.error?.type),
-        // 原始异常只交给 Telemetry 做受控脱敏；result.error 是面向业务协议重新包装后的错误，
-        // 不能覆盖 Trace 中用于定位根因的 source message/type/code。
-        error,
-      );
-    }
+    finishToolCallFailure({
+      deps,
+      toolCall: canonicalToolCall,
+      traceContext,
+      result,
+      error,
+      durationMs,
+      failureStage,
+      options,
+      telemetry,
+    });
     return result;
   } finally {
     unlinkParentAbort();

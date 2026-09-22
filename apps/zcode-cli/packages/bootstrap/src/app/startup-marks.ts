@@ -1,12 +1,43 @@
 import type { ConfigResult } from "@zcode/adapters/config";
 import { discoverNodePluginsSync } from "@zcode/adapters/plugins";
+import { createNodeLoggerFactory } from "@zcode/adapters/logging";
 import type { AgentRuntimeConfig } from "@zcode/core";
-import type { Logger, McpServerConfig, PluginLoadOutcome } from "@zcode/contracts";
-import type { StartupTimer } from "../startup-logging.js";
+import {
+  traceContextToLogContext,
+  type Logger,
+  type McpServerConfig,
+  type PluginLoadOutcome,
+  type TraceContext,
+} from "@zcode/contracts";
+import { StartupTimer } from "../startup-logging.js";
 import { resolveOfficialPluginRoots } from "./bundled-plugins.js";
 import { DEFAULT_ENABLED_OFFICIAL_PLUGIN_IDS } from "./official-plugin-definitions.js";
 import { getPluginStorageRoot } from "./paths.js";
 import type { ZCodeAppOptions } from "./types.js";
+
+export function createAppStartupLogging(input: {
+  options: Pick<ZCodeAppOptions, "env" | "loggerFactory">;
+  traceContext: TraceContext;
+  startedAt: number;
+}) {
+  const loggerFactory =
+    input.options.loggerFactory ?? createNodeLoggerFactory({ env: input.options.env });
+  const trace = traceContextToLogContext(input.traceContext);
+  const logger = loggerFactory.createLogger("zcode").child({ ...trace, module: "bootstrap" });
+  const modelLogger = loggerFactory
+    .createLogger("zcode")
+    .child({ ...trace, module: "adapters.model" });
+  const startupTimer = new StartupTimer(
+    logger,
+    {
+      ...trace,
+      module: "bootstrap",
+      startupKind: "zcode_app",
+    },
+    input.startedAt,
+  );
+  return { loggerFactory, logger, modelLogger, startupTimer };
+}
 
 export function resolveStartupPlugins(input: {
   cliStorageRoot: string;

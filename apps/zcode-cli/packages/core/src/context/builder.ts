@@ -149,8 +149,11 @@ export class ContextBuilder {
       }
 
       // Memory
-      if (this.config.memoryRoot) {
-        const memorySection = buildMemorySection(this.config.memoryRoot);
+      if (this.config.memoryRoot || this.config.structuredMemoryEnabled) {
+        const memorySection = buildMemorySection(
+          this.config.memoryRoot,
+          this.config.structuredMemoryEnabled === true,
+        );
         if (memorySection) {
           sections.push(memorySection);
         }

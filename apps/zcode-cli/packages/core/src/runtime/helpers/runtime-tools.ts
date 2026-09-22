@@ -21,7 +21,11 @@ import {
   resolveRuntimeDynamicWorkflowToolsIncluded,
 } from "./tool-allowlist.js";
 import { isStaleBranchRuntimeTaskEvent } from "../methods/runtime-command-generation.js";
-import { resolveEnabledProjectMemoryRoot } from "./project-memory.js";
+import {
+  createRuntimeMemoryAccess,
+  isStructuredMemoryEnabled,
+  resolveEnabledProjectMemoryRoot,
+} from "./project-memory.js";
 import { createToolRegistry } from "../../tool/registry.js";
 import type { ToolEntry } from "../../tool/types.js";
 
@@ -91,6 +95,7 @@ export function registerRuntimeBuiltInTools(
     // node_repl/browser-use 由 ZCode 官方 browser-use 插件启停推导出的 runtimeFeatures 控制。
     includeNodeRepl: nodeReplEnabled,
     includeBrowserUse: browserUseEnabled,
+    includeMemory: isStructuredMemoryEnabled(runtime, config),
     embeddedSearchEnabled: resolveRuntimeEmbeddedSearchEnabled(runtime),
     agentProfiles: config.subagents?.profiles,
     allowedTools: resolveBuiltInToolAllowlist(config),
@@ -232,6 +237,12 @@ function createRuntimeToolExecutor(
     automationPort: deps.automationPort,
     offPeakPort: deps.offPeakPort,
     sessionStore: deps.sessionStore,
+    ...(isStructuredMemoryEnabled(runtime)
+      ? {
+          memoryStore: runtime.memoryStore,
+          getMemoryAccess: () => createRuntimeMemoryAccess(runtime),
+        }
+      : {}),
     sessionModePort: createRuntimeSessionModePort(runtime),
     workflowPort: deps.workflowPort,
     dynamicWorkflowRunPort: deps.dynamicWorkflowRunPort,

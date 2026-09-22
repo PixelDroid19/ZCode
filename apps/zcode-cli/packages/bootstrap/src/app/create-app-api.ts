@@ -34,6 +34,7 @@ interface CreateAppApiInput {
   fileSystemPort: FileSystemPort;
   getRuntime(): AgentRuntime;
   inputFacade: ReturnType<typeof createInputFacade>;
+  memoryStore?: { close(): Promise<void> };
   modelAdapter: ReturnType<typeof createModelAdapter>;
   modelTelemetry: ReturnType<typeof createModelTelemetry>;
   options: ZCodeAppOptions;
@@ -94,6 +95,7 @@ export function createAppApi(input: CreateAppApiInput): ZCodeApp {
     fileSystemPort,
     getRuntime,
     inputFacade,
+    memoryStore,
     modelAdapter,
     modelTelemetry,
     options,
@@ -340,9 +342,13 @@ export function createAppApi(input: CreateAppApiInput): ZCodeApp {
         await closeSession?.();
       } finally {
         try {
-          providerModelRuntime?.dispose();
+          await memoryStore?.close();
         } finally {
-          await modelTelemetry.shutdown();
+          try {
+            providerModelRuntime?.dispose();
+          } finally {
+            await modelTelemetry.shutdown();
+          }
         }
       }
     },

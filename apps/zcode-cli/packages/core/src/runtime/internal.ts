@@ -35,6 +35,7 @@ import type {
   ContextBuilder,
   ContextBuildResult,
 } from "./deps.js";
+import type { MemoryStorePort } from "@zcode/contracts";
 import type {
   ActiveTurnSteeringState,
   ActiveTurnStartReservation,
@@ -96,6 +97,8 @@ export interface AgentRuntimeInternal
   latestContextBuildResult?: ContextBuildResult;
   memoryRoot?: string;
   memoryIndexContent?: string;
+  memoryStore?: MemoryStorePort;
+  memoryWorkspaceRoot?: string;
   memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   contextSourcePort?: ContextSourcePort;
   skillPort?: SkillPort;

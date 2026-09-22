@@ -23,6 +23,7 @@ import type {
   McpPort,
   MessageHistory,
   MessageId,
+  MemoryStorePort,
   ModelCatalogPort,
   ModelSelection,
   ModelToolContract,
@@ -110,6 +111,8 @@ export class AgentRuntime {
   private latestContextBuildResult?: ContextBuildResult;
   private memoryRoot?: string;
   private memoryIndexContent?: string;
+  private memoryStore?: MemoryStorePort;
+  private memoryWorkspaceRoot?: string;
   private memoryExtractionScheduler?: ProjectMemoryExtractionScheduler;
   private contextSourcePort?: ContextSourcePort;
   private skillPort?: SkillPort;
@@ -217,6 +220,8 @@ export class AgentRuntime {
     this.now = deps.now ?? (() => new Date());
     this.isRemoteWorkspace = deps.isRemoteWorkspace ?? (() => false);
     this.modelFactory = deps.modelFactory;
+    this.memoryStore = deps.memoryStore;
+    this.memoryWorkspaceRoot = deps.memoryWorkspaceRoot;
     this.modelIoDir = deps.modelIoDir;
     this.providerRuntimeHeadersPort = deps.providerRuntimeHeadersPort;
     this.browserControlPort = deps.browserControlPort;

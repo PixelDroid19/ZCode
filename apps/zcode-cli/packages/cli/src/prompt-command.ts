@@ -215,7 +215,7 @@ export const runPrompt = async (
         ...(mode ? { mode } : {}),
         ...(toolDisallowlist ? { toolDisallowlist } : {}),
         ...(forceMcs ? { midConversationSystem: { mode: "force" as const } } : {}),
-        memory: { extractionEnabled: options.memoryBench === true },
+        memory: { extractionEnabled: true },
         modelStreaming: "on",
         presentationSurface,
         workingDirectory,
@@ -304,9 +304,13 @@ export const runPrompt = async (
         signal: abortController.signal,
       });
     }
-    // bench 的正常等待必须先于 close；close 会取消 Extraction，且有独立的清理时限。
+    // Extraction 必须在结果前完成或达到 60 秒上限；close 会取消未完成的任务。
+    // bench 保留无界等待，普通 CLI 使用 scheduler 默认的有界排空。
     if (options.memoryBench) {
       await app.runtime.drainMemoryExtractions(null);
+      abortController.signal.throwIfAborted();
+    } else {
+      await app.runtime.drainMemoryExtractions();
       abortController.signal.throwIfAborted();
     }
     // 结果行之后绝不能再冒出事件行——stream-json 的 result 是流的终止符。

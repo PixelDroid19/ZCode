@@ -166,6 +166,7 @@ function createRuntimeDeps(
   childSessionId: SessionId,
   clientPortsContext: ChildClientPortsContext,
 ): ConstructorParameters<typeof AgentRuntime>[2] {
+  const memoryContext = deps.runtime.getExperienceMemoryRuntimeContext();
   return {
     agentTelemetry: deps.agentTelemetry,
     agentTelemetryCausation: deps.agentTelemetry.captureCausation(),
@@ -223,6 +224,8 @@ function createRuntimeDeps(
     imageProcessorPort: deps.imageProcessorPort,
     pdfDocumentPort: deps.pdfDocumentPort,
     logger: deps.logger,
+    memoryStore: memoryContext.memoryStore,
+    memoryWorkspaceRoot: memoryContext.workspaceRoot,
     mcpPort: deps.mcpPort,
     modelFactory: deps.modelFactory,
     resolveEffectiveModelSelection: deps.appOptions.resolveEffectiveModelSelection,

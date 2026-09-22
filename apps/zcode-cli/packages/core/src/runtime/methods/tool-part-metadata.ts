@@ -6,9 +6,7 @@ import {
 import { createMcpToolDisplay } from "../../tool/executor/result-display.js";
 
 export function mcpToolPartMetadata(
-  presentation:
-    | { serverName: string; toolName: string; description?: string }
-    | undefined,
+  presentation: { serverName: string; toolName: string; description?: string } | undefined,
 ): CompletedToolPartMetadata | undefined {
   const display = createMcpToolDisplay(presentation);
   return display
@@ -16,9 +14,7 @@ export function mcpToolPartMetadata(
     : undefined;
 }
 
-export function completedToolPartMetadata(
-  result: ToolExecutionResult,
-): CompletedToolPartMetadata {
+export function completedToolPartMetadata(result: ToolExecutionResult): CompletedToolPartMetadata {
   const serialization = result.serialization
     ? {
         truncated: result.serialization.truncated,
@@ -37,5 +33,6 @@ export function completedToolPartMetadata(
     // resume 需要恢复模型当时真实读到的文件快照；只依赖 tool_result 文本
     // 会把主路径绑死在 provider 展示格式上，所以新 session 结构化持久化 read-state。
     ...(result.readFileStateMetadata ? { readFileState: result.readFileStateMetadata } : {}),
+    ...(result.executionOutcome ? { executionOutcome: result.executionOutcome } : {}),
   };
 }

@@ -18,6 +18,8 @@ import type {
   ImageProcessorPort,
   PdfDocumentPort,
   Logger,
+  MemoryAccess,
+  MemoryStorePort,
   Model,
   PermissionBrokerPort,
   SessionEvent,
@@ -134,6 +136,8 @@ export interface ToolExecutorOptions {
   setWorkingDirectory?: (cwd: string) => Promise<void> | void;
   getWorkspaceRoot?: () => string;
   getMemoryRoot?: () => string | undefined;
+  memoryStore?: MemoryStorePort;
+  getMemoryAccess?: () => MemoryAccess;
   traceContext?: TraceContext;
   mode?: CollaborationMode;
   getMode?: () => CollaborationMode;
@@ -240,6 +244,8 @@ export interface ToolExecutorDeps {
   clientMode?: "desktop-continuous" | "web-remote-replayable";
   deliveryKind?: "desktop-continuous" | "web-remote-replayable";
   getMemoryRoot?: () => string | undefined;
+  memoryStore?: MemoryStorePort;
+  getMemoryAccess?: () => MemoryAccess;
   runtimeScope: ToolRuntimeScope;
   traceContext?: TraceContext;
   getMode: () => CollaborationMode;

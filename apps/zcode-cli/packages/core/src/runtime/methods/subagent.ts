@@ -315,6 +315,7 @@ export function createDefaultSubagentPort(
             maxTurns: request.maxTurns ?? this.config.subagents?.maxTurns ?? 4,
             parentSessionId: this.sessionId,
             taskType: "subagent_child",
+            memory: this.config.memory,
             // 动态工作流灰度门必须结构性继承：
             // 父会话关着而子代理开着，等于 Agent 工具变成绕过灰度的后门。默认路径（child 继承
             // 父 registry 可见的工具名）本来就够，但**自定义 agent profile 显式写
@@ -371,6 +372,8 @@ export function createDefaultSubagentPort(
             imageProcessorPort: deps.imageProcessorPort,
             pdfDocumentPort: deps.pdfDocumentPort,
             memoryRoot: persistentMemory?.rootDir,
+            memoryStore: this.memoryStore,
+            memoryWorkspaceRoot: request.workspaceRoot,
             capabilitySource: inheritedCapabilitySource,
             mcpPort: childMcpAccess.port,
             skillPort: childSkillPort,

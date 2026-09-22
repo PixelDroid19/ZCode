@@ -1,20 +1,15 @@
 import { resolve } from "node:path";
 import { createInMemorySessionEventStore } from "@zcode/adapters/storage";
-import { createNodeLoggerFactory } from "@zcode/adapters/logging";
 import { createConfig } from "@zcode/adapters/config";
 import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
 import { createNodeSkillAdapter } from "@zcode/adapters/skills";
 import { AgentRuntime } from "@zcode/core";
 import { createModelTelemetry } from "@zcode/telemetry";
-import {
-  createRootTraceContext,
-  createSessionId,
-  traceContextToLogContext,
-} from "@zcode/contracts";
+import { createRootTraceContext, createSessionId } from "@zcode/contracts";
 import { isRemoteWorkspaceIdentity } from "@zcode/shared";
 import { createModelAdapter } from "../model-factory.js";
 import { scheduleStartupLogRetentionCleanup } from "../log-retention.js";
-import { StartupTimer, startupNow } from "../startup-logging.js";
+import { startupNow } from "../startup-logging.js";
 import { createConfigCliOverrides, resolveEffectiveConfigResult } from "./app-config-options.js";
 import { createAppApi } from "./create-app-api.js";
 import { createAppDynamicWorkflowRunPort } from "./create-app-dynamic-workflow.js";
@@ -34,6 +29,7 @@ import {
 import { ApiProviderModelRuntime } from "./provider-registry-model-runtime.js";
 import {
   completeAppStartup,
+  createAppStartupLogging,
   markConfigurationLoaded,
   markRuntimeConstructed,
   startAppStartup,
@@ -63,20 +59,11 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     }),
     options,
   );
-  const loggerFactory = options.loggerFactory ?? createNodeLoggerFactory({ env: options.env });
-  const logger = loggerFactory.createLogger("zcode").child({
-    ...traceContextToLogContext(traceContext),
-    module: "bootstrap",
+  const { loggerFactory, logger, modelLogger, startupTimer } = createAppStartupLogging({
+    options,
+    traceContext,
+    startedAt: startupStartedAt,
   });
-  const startupTimer = new StartupTimer(
-    logger,
-    {
-      ...traceContextToLogContext(traceContext),
-      module: "bootstrap",
-      startupKind: "zcode_app",
-    },
-    startupStartedAt,
-  );
   startAppStartup({
     hasInjectedModelAdapter: options.modelAdapter !== undefined,
     resume: options.resume === true,
@@ -86,16 +73,13 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     configResult,
     startupTimer,
   });
-  const modelLogger = loggerFactory.createLogger("zcode").child({
-    ...traceContextToLogContext(traceContext),
-    module: "adapters.model",
-  });
   const modelTelemetry = createModelTelemetry({
     owner: options.telemetryOwner,
     sessionId,
   });
   const browserBroker: NodeReplBrowserBrokerState = {};
   let providerModelRuntime: ApiProviderModelRuntime | undefined;
+  let memoryStore: Awaited<ReturnType<typeof createAppResources>>["memoryStore"];
   let disposeStartupCapabilities: (() => Promise<void> | void) | undefined;
   try {
     let runtime: AgentRuntime | undefined;
@@ -104,6 +88,19 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       return runtime;
     };
     const browserControlPort = options.browserControlPort;
+    const appResources = await createAppResources({
+      appVersion,
+      browserBroker,
+      configResult,
+      getRuntime,
+      logger,
+      options,
+      sessionId,
+      startupTimer,
+      traceContext,
+      workingDirectory,
+    });
+    memoryStore = appResources.memoryStore;
     const {
       artifactStore,
       cliStorageRoot,
@@ -114,6 +111,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       imageProcessorPort,
       inputHistoryStore,
       localSettingStore,
+      memoryStore: runtimeMemoryStore,
       mcpPort,
       modelIoDir,
       ownsExecutionPort,
@@ -130,18 +128,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       storageRoot,
       untrustedProjectMcpServers,
       workspaceHookRuntimeSecurity,
-    } = await createAppResources({
-      appVersion,
-      browserBroker,
-      configResult,
-      getRuntime,
-      logger,
-      options,
-      sessionId,
-      startupTimer,
-      traceContext,
-      workingDirectory,
-    });
+    } = appResources;
     const { prepareResume, prepareUserExecutionBoundary, resumeFromStore } =
       createAppSessionLifecycle({
         getRuntime,
@@ -291,6 +278,8 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       imageProcessorPort,
       pdfDocumentPort,
       artifactStore,
+      memoryStore: runtimeMemoryStore,
+      memoryWorkspaceRoot: workingDirectory,
       contextSourcePort:
         options.contextSourcePort ?? createNodeContextSourceAdapter({ env: options.env }),
       skillPort:
@@ -385,6 +374,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       fileSystemPort,
       getRuntime,
       inputFacade,
+      memoryStore,
       modelAdapter,
       modelTelemetry,
       options,
@@ -404,6 +394,14 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     });
   } catch (error) {
     await disposeStartupCapabilities?.();
+    try {
+      await memoryStore?.close();
+    } catch (closeError) {
+      logger.warn("Failed to close experience memory store after startup failure", {
+        error: closeError instanceof Error ? closeError.message : String(closeError),
+        event: "memory.store.startup_cleanup_failed",
+      });
+    }
     providerModelRuntime?.dispose();
     void modelTelemetry.shutdown().catch(() => undefined);
     void browserBroker.owned?.close();

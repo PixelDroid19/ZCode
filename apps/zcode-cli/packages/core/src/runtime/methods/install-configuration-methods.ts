@@ -10,6 +10,7 @@ import {
   getProjectId,
   getProjection,
   getSessionEventStore,
+  getExperienceMemoryRuntimeContext,
   getSessionId,
   getSessionModelSelection,
   getSessionShellSelection,
@@ -72,6 +73,7 @@ export function installRuntimeConfigurationMethods(proto: Record<string, unknown
   proto.getToolExecutor = getToolExecutor;
   proto.subscribeEvents = subscribeEvents;
   proto.getSessionEventStore = getSessionEventStore;
+  proto.getExperienceMemoryRuntimeContext = getExperienceMemoryRuntimeContext;
   proto.notifyExternalChildSessionEvent = notifyExternalChildSessionEvent;
   proto.createChildClientPorts = createChildClientPorts;
   proto.getContextBuilder = getContextBuilder;
