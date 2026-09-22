@@ -96,7 +96,8 @@ test(
       adopted = await source.prepare({ traceContext });
       assert.ok(adopted);
       adopted.commit?.();
-      const adoptedPort = adopted.mcp.port!;
+      assert.ok(adopted.mcp?.port);
+      const adoptedPort = adopted.mcp.port;
       const adoptedFacade = createRecoveryFacade({
         mcpPort: adoptedPort,
         config,
@@ -129,7 +130,7 @@ test(
 
       await verifyRetryLeaseDuringGenerationReplacement(root, traceContext);
     } finally {
-      await source?.dispose();
+      await source?.dispose?.();
       if (adopted && adopted.release) await adopted.release();
       await mcpPort.close();
       await pool.close();

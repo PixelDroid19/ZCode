@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { createConfig, type ConfigResult } from "@zcode/adapters/config";
 import {
   captureSkillPort,

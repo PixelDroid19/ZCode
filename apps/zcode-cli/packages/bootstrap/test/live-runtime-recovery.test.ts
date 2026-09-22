@@ -5,13 +5,18 @@ import { join } from "node:path";
 import test from "node:test";
 import { createConfig } from "@zcode/adapters/config";
 import { createNodeExecutionAdapter } from "@zcode/adapters/exec";
-import { createInMemorySessionEventStore, type Logger } from "@zcode/contracts";
+import {
+  createInMemorySessionEventStore,
+  createRootTraceContext,
+  type Logger,
+} from "@zcode/contracts";
+import { ProviderRegistry } from "@zcode/provider";
 import { AgentRuntime, createToolRegistry } from "@zcode/core";
 import { resolveZCodePlugins } from "../src/plugins.js";
 import { createLiveCapabilityLoader } from "../src/app/live-capability-loader.js";
 import { createLiveCapabilitySource } from "../src/app/live-capability-source.js";
 
-const traceContext = { traceId: "live-runtime-recovery" };
+const traceContext = createRootTraceContext();
 const logger: Logger = {
   debug() {},
   info() {},
@@ -54,6 +59,7 @@ test("a session recovers its status and callable catalog after restoring capabil
   );
   const env = { ...process.env, HOME: home, USERPROFILE: home };
   const options = {
+    providerRegistry: new ProviderRegistry(),
     env,
     officialPluginRoots: [],
     pluginStorageRoot: join(root, "plugins"),
