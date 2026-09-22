@@ -106,6 +106,13 @@ runtime explicitly, which supports normal Node, SEA, and Electron hosts without 
 The SEA internal script host dispatches before provider initialization. Its lifetime
 follows the script's asynchronous work; the ordinary CLI exit watchdog must not cut
 off valid tool execution. The parent executor still owns cancellation and deadlines.
+Import or execution failures exit with code 1 and put a bounded diagnostic on
+stderr: script filename, error type, useful message, and a source line/column when
+the engine supplies one. The diagnostic includes at most three Error causes,
+uses the existing shared text redaction policy, and never serializes stdin,
+arguments, environment, or arbitrary thrown objects. Stdout remains the tool's
+JSON result channel. Integration acceptance invokes the actual CLI entrypoint and
+the packaged SEA host through success, broken script, and repaired script states.
 The runtime includes concise manifest guidance in model context so agents can create
 these capabilities without requiring a preinstalled skill.
 
