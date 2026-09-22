@@ -1,8 +1,12 @@
 import { createHash } from "node:crypto";
 import { homedir } from "node:os";
-import { extname, isAbsolute, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { createConfig, type ConfigResult } from "@zcode/adapters/config";
-import { captureSkillPort, fingerprintCapabilityInputs } from "@zcode/adapters/capability-inputs";
+import {
+  captureSkillPort,
+  fingerprintCapabilityInputs,
+  fingerprintExplicitCapabilityFiles,
+} from "@zcode/adapters/capability-inputs";
 import { createNodeSkillAdapter, resolveDefaultSkillRoots } from "@zcode/adapters/skills";
 import { loadLiveTools } from "@zcode/adapters/live-tools";
 import { loadDirectoryMcpServers } from "@zcode/adapters/directory-mcp";
@@ -22,6 +26,7 @@ import { resolveAppRuntimeConfig } from "./runtime-config.js";
 import { resolveLiveToolNodeRuntime } from "./live-tool-node-runtime.js";
 import { getPluginStorageRoot } from "./paths.js";
 import { applyDirectoryMcpAugmentations } from "./live-mcp-configuration.js";
+import { resolveMcpCodePaths } from "./live-mcp-command-paths.js";
 import type { ZCodeAppOptions } from "./types.js";
 
 export interface LiveCapabilityLoaderOptions {
@@ -52,13 +57,22 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
   }
   const homeDirectory = options.env?.HOME || options.env?.USERPROFILE || homedir();
   let paths = capabilityInputPaths(input.initialConfig, input.initialPlugins, input);
+  let mcpCodePaths: string[] = [];
   let committedFingerprint: string | undefined;
+  let committedMcpContentRevision: string | undefined;
   let lastRevision: string | undefined;
   return {
     initialPaths: paths,
     async load(adoptedRevision?: string): Promise<LoadedCapabilityEnvironment | undefined> {
-      const fingerprint = await fingerprintCapabilityInputs(paths);
-      if (fingerprint === committedFingerprint && adoptedRevision === lastRevision)
+      const fingerprint = await fingerprintCapabilityInputs(paths, {
+        skipContentsForPaths: mcpCodePaths,
+      });
+      const currentMcpContentRevision = await fingerprintExplicitCapabilityFiles(mcpCodePaths);
+      if (
+        fingerprint === committedFingerprint &&
+        currentMcpContentRevision === committedMcpContentRevision &&
+        adoptedRevision === lastRevision
+      )
         return undefined;
       const config = resolveEffectiveConfigResult(
         createConfig({
@@ -156,24 +170,19 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
         ],
       };
       const skillRoots = await resolveDefaultSkillRoots(workingDirectory, skillOptions);
-      const mcpCodePaths = Object.values(runtimeConfig.mcp?.servers ?? {}).flatMap((server) =>
-        server.type !== "stdio"
-          ? []
-          : [server.command, ...(server.args ?? [])]
-              .filter((value) =>
-                [".js", ".mjs", ".cjs", ".ts", ".py", ".sh"].includes(extname(value)),
-              )
-              .map((value) =>
-                isAbsolute(value) ? value : resolve(server.cwd ?? workingDirectory, value),
-              ),
+      const nextMcpCodePaths = resolveMcpCodePaths(
+        runtimeConfig.mcp?.servers ?? {},
+        workingDirectory,
       );
       const discoveryPaths = [
         ...capabilityInputPaths(config, plugins, input),
         ...(directoryMcp?.watchPaths ?? []),
         ...skillRoots.map((root) => root.path),
-        ...mcpCodePaths,
+        ...nextMcpCodePaths,
       ];
-      const preparationFingerprint = await fingerprintCapabilityInputs(discoveryPaths);
+      const preparationFingerprint = await fingerprintCapabilityInputs(discoveryPaths, {
+        skipContentsForPaths: nextMcpCodePaths,
+      });
       const skillAdapter = options.skillPort ?? createNodeSkillAdapter(skillOptions);
       const skillsEnabled = config.config.features.skill && config.config.skills.enabled;
       const skills = skillsEnabled
@@ -213,12 +222,20 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
       const frozenSkillPort = skillsEnabled
         ? (options.skillPort ?? (await captureSkillPort(skills)))
         : undefined;
-      const mcpContentRevision = await fingerprintCapabilityInputs(mcpCodePaths);
-      const finalFingerprint = await fingerprintCapabilityInputs(nextPaths);
+      const mcpContentRevision = samePaths(mcpCodePaths, nextMcpCodePaths)
+        ? currentMcpContentRevision
+        : await fingerprintExplicitCapabilityFiles(nextMcpCodePaths);
+      const finalFingerprint = await fingerprintCapabilityInputs(nextPaths, {
+        skipContentsForPaths: nextMcpCodePaths,
+      });
       // 重读已知输入，拒绝扫描过程中被改写的混合版本；下一边界自然重试。
       if (
-        (await fingerprintCapabilityInputs(paths)) !== fingerprint ||
-        (await fingerprintCapabilityInputs(discoveryPaths)) !== preparationFingerprint
+        (await fingerprintCapabilityInputs(paths, { skipContentsForPaths: mcpCodePaths })) !==
+          fingerprint ||
+        (await fingerprintCapabilityInputs(discoveryPaths, {
+          skipContentsForPaths: nextMcpCodePaths,
+        })) !== preparationFingerprint ||
+        (await fingerprintExplicitCapabilityFiles(nextMcpCodePaths)) !== mcpContentRevision
       ) {
         throw new Error(
           "Capability sources changed during preparation; retrying at the next boundary",
@@ -226,14 +243,17 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
       }
       const revision = createHash("sha256")
         .update(finalFingerprint)
+        .update(mcpContentRevision)
         .update(liveTools.revision)
         .update(
           JSON.stringify({ skills, mcp: runtimeConfig.mcp, profiles: runtimeConfig.subagents }),
         )
         .digest("hex");
       paths = nextPaths;
+      mcpCodePaths = nextMcpCodePaths;
       if (revision === adoptedRevision) {
         committedFingerprint = finalFingerprint;
+        committedMcpContentRevision = mcpContentRevision;
         lastRevision = revision;
         return undefined;
       }
@@ -241,6 +261,7 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
         nodeRuntime: resolveLiveToolNodeRuntime(),
       });
       committedFingerprint = finalFingerprint;
+      committedMcpContentRevision = mcpContentRevision;
       lastRevision = revision;
       return {
         revision,
@@ -253,7 +274,7 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
         mcp: runtimeConfig.mcp ?? { enabled: false },
         mcpContentRevision,
         async verifyMcpContentRevision() {
-          if ((await fingerprintCapabilityInputs(mcpCodePaths)) !== mcpContentRevision) {
+          if ((await fingerprintExplicitCapabilityFiles(nextMcpCodePaths)) !== mcpContentRevision) {
             throw new Error("MCP source changed during capability preparation");
           }
         },
@@ -276,6 +297,10 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
       };
     },
   };
+}
+
+function samePaths(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((path, index) => path === right[index]);
 }
 
 const LIVE_CAPABILITY_INSTRUCTIONS = `You can create reusable local tools during this session.
