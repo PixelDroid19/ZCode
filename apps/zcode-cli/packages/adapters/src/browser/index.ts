@@ -18,6 +18,7 @@ import {
   type PlaywrightChromiumModule,
 } from "./executable.js";
 import { executeManagedPageCommand } from "./page-command.js";
+import { waitForPromise } from "./promise-timeout.js";
 import { abortError, classifyError, hasSideEffects, raceWithAbort } from "./request.js";
 import { ManagedCdpSession } from "./session.js";
 
@@ -424,21 +425,3 @@ export {
 } from "./executable.js";
 export type { BrowserExecutableResolutionOptions, PlaywrightChromiumModule } from "./executable.js";
 export { isAllowedManagedBrowserUrl } from "./page-command.js";
-
-function waitForPromise(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
-  return new Promise<boolean>((resolve) => {
-    let settled = false;
-    let timer: NodeJS.Timeout | undefined;
-    const finish = (completed: boolean) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      resolve(completed);
-    };
-    timer = setTimeout(() => finish(false), timeoutMs);
-    void promise.then(
-      () => finish(true),
-      () => finish(true),
-    );
-  });
-}

@@ -1,0 +1,55 @@
+import { createHash } from "node:crypto";
+import type { CanonicalCredentialSnapshot } from "./oauth-credentials.js";
+
+export interface OAuthInteractiveLogInput {
+  adapterInstanceId?: string;
+  keyPrefix: string;
+  serverName: string;
+}
+
+export function hasNewerOAuthCredentials(
+  current: CanonicalCredentialSnapshot | undefined,
+  baselineGeneration: string | undefined,
+): boolean {
+  return Boolean(current?.tokens && current.generation !== baselineGeneration);
+}
+
+export function normalizeOAuthCallbackPath(value: string | undefined, serverName: string): string {
+  const fallback = `/oauth/callback/mcp/${encodeURIComponent(serverName)}`;
+  if (!value) return fallback;
+  return value.startsWith("/") ? value : `/${value}`;
+}
+
+export function oauthInteractiveLogContext(
+  input: OAuthInteractiveLogInput,
+  state?: string,
+): Record<string, unknown> {
+  return {
+    adapterInstanceId: input.adapterInstanceId,
+    credentialKeyPrefix: input.keyPrefix,
+    mcpServerName: input.serverName,
+    ...(state
+      ? { oauthStateId: createHash("sha256").update(state).digest("hex").slice(0, 16) }
+      : {}),
+    processId: process.pid,
+  };
+}
+
+export function hashOAuthIdentifier(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
+export function waitForOAuthFollower(durationMs: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, durationMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}

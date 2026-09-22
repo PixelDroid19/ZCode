@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { join, posix, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { existsSync } from "node:fs";
 import { targetParts } from "./sea-targets.mjs";
 import {
@@ -80,6 +80,26 @@ export const collectSeaTuiAssets = async ({ root, stagingDirectory, target }) =>
   };
 };
 
+export const collectSeaTuiExternalWorkspaceBuilds = async ({ root, target }) => {
+  const workspacePackageDirectories = await discoverWorkspacePackageDirectories(root);
+  const packageEntries = await runtimePackageNames({
+    requireCompiledWorkspacePackage: false,
+    root,
+    target,
+    workspacePackageDirectories,
+  });
+  const workspaceEntriesByName = new Map(
+    packageEntries
+      .filter(({ packageName }) => workspacePackageDirectories.has(packageName))
+      .map((entry) => [entry.packageName, entry]),
+  );
+  const orderedEntries = await orderWorkspacePackages({ workspaceEntriesByName });
+
+  // apps/zcode-cli 的 Turbo 图只能构建子 workspace；根 packages 仍是当前
+  // TUI 运行时闭包的一部分，必须在 SEA 收集前按源码 manifest 单独构建。
+  return orderedEntries.filter(({ packageDirectory }) => !isPathInside(root, packageDirectory));
+};
+
 const discoverWorkspacePackageDirectories = async (root) => {
   const directories = new Map();
 
@@ -124,7 +144,12 @@ const workspacePackageParentDirectories = (root) => {
   ];
 };
 
-const runtimePackageNames = async ({ root, target, workspacePackageDirectories }) => {
+const runtimePackageNames = async ({
+  requireCompiledWorkspacePackage = true,
+  root,
+  target,
+  workspacePackageDirectories,
+}) => {
   const tuiDirectory = workspacePackageDirectories.get("@zcode/tui");
   if (!tuiDirectory) {
     throw new Error("Missing @zcode/tui workspace package.");
@@ -149,6 +174,7 @@ const runtimePackageNames = async ({ root, target, workspacePackageDirectories }
       await resolveRuntimePackageDirectory({
         fromDirectory: entry.fromDirectory,
         packageName,
+        requireCompiledWorkspacePackage,
         root,
         workspacePackageDirectories,
       }),
@@ -207,6 +233,47 @@ const runtimePackageNames = async ({ root, target, workspacePackageDirectories }
   }
 
   return ordered;
+};
+
+const orderWorkspacePackages = async ({ workspaceEntriesByName }) => {
+  const ordered = [];
+  const visiting = new Set();
+  const visited = new Set();
+
+  const visit = async (packageName) => {
+    if (visited.has(packageName)) return;
+    if (visiting.has(packageName)) {
+      throw new Error(`Circular SEA workspace runtime dependency at ${packageName}.`);
+    }
+    const entry = workspaceEntriesByName.get(packageName);
+    if (!entry) return;
+
+    visiting.add(packageName);
+    const packageJson = JSON.parse(
+      await readFile(resolve(entry.packageDirectory, "package.json"), "utf8"),
+    );
+    for (const dependencyName of Object.keys(packageJson.dependencies ?? {})) {
+      await visit(dependencyName);
+    }
+    visiting.delete(packageName);
+    visited.add(packageName);
+    ordered.push(entry);
+  };
+
+  for (const packageName of workspaceEntriesByName.keys()) {
+    await visit(packageName);
+  }
+  return ordered;
+};
+
+const isPathInside = (parentDirectory, candidatePath) => {
+  const pathFromParent = relative(parentDirectory, candidatePath);
+  return (
+    pathFromParent === "" ||
+    (!pathFromParent.startsWith(`..${sep}`) &&
+      pathFromParent !== ".." &&
+      !isAbsolute(pathFromParent))
+  );
 };
 
 const shouldQueueRuntimeDependency = ({

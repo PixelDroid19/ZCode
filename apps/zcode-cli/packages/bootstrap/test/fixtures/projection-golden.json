@@ -1,0 +1,1159 @@
+{
+  "deltas": [
+    [
+      {
+        "op": "state.updated",
+        "patch": {
+          "meta": {
+            "title": "Write fixture content to note.txt",
+            "titleSource": "generated"
+          },
+          "revision": 1
+        }
+      }
+    ],
+    [
+      {
+        "op": "row.appended",
+        "row": {
+          "rowId": 1,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "running",
+          "startedAt": 1790051347070
+        }
+      },
+      {
+        "op": "row.appended",
+        "row": {
+          "rowId": 2,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "userInput",
+          "text": "Write fixture content to note.txt",
+          "origin": "realUser"
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "control": {
+            "phase": "running",
+            "sessionEnded": false,
+            "canStop": true,
+            "stopState": "stoppable",
+            "stopTargetKind": "assistant",
+            "activeWorks": [
+              {
+                "kind": "primaryTurn",
+                "foregroundExecutionId": "runtime_command_1",
+                "startedAt": 1790051347070
+              }
+            ],
+            "lastError": null,
+            "apiRetry": null
+          },
+          "availability": {
+            "fork": {
+              "allowed": true
+            },
+            "compact": {
+              "allowed": true
+            },
+            "switchModelConfig": {
+              "allowed": true
+            },
+            "setFollowupMode": {
+              "allowed": true
+            },
+            "queueEdit": {
+              "allowed": true
+            },
+            "sendQueuedNow": {
+              "allowed": true
+            },
+            "pauseGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToPause"
+            },
+            "resumeGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToResume"
+            }
+          },
+          "inputRouting": {
+            "mode": "enqueue"
+          }
+        }
+      },
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 2,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "userInput",
+          "text": "Write fixture content to note.txt",
+          "origin": "realUser",
+          "actions": {
+            "canEdit": true,
+            "editDisposition": "rewind"
+          }
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 2
+        }
+      }
+    ],
+    [
+      {
+        "op": "state.updated",
+        "patch": {
+          "usage": {
+            "contextWindow": {
+              "usedTokens": 2,
+              "maxTokens": 128000,
+              "autoCompactThresholdTokens": null,
+              "cache": {
+                "inputTokens": 1,
+                "cacheReadTokens": 0,
+                "cacheWriteTokens": 0,
+                "latestHitRate": 0,
+                "hitRate": 0,
+                "hitRateRequestCount": 1,
+                "totalInputTokens": 1,
+                "totalCacheReadTokens": 0,
+                "totalCacheWriteTokens": 0
+              },
+              "breakdown": [
+                {
+                  "source": "system_prompt",
+                  "chars": 7532
+                },
+                {
+                  "source": "meta_user_context",
+                  "chars": 41
+                },
+                {
+                  "source": "system_tool_schemas",
+                  "chars": 56450
+                },
+                {
+                  "source": "messages",
+                  "chars": 61
+                }
+              ]
+            },
+            "cumulative": {
+              "inputTokens": 1,
+              "outputTokens": 1,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            }
+          }
+        }
+      }
+    ],
+    [],
+    [
+      {
+        "op": "row.appended",
+        "row": {
+          "rowId": 3,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "write-projection",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347086,
+          "createdAtSeq": 6,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr60_e13e9110-801f-4b6d-ac2e-22729cb88250",
+          "toolCallId": "write-projection",
+          "toolName": "Write",
+          "status": "inputStreaming",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\",\"content\":\"fixture content\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt",
+            "content": "fixture content"
+          }
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 3
+        }
+      }
+    ],
+    [],
+    [],
+    [
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 3,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "write-projection",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347086,
+          "createdAtSeq": 6,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr60_e13e9110-801f-4b6d-ac2e-22729cb88250",
+          "toolCallId": "write-projection",
+          "toolName": "Write",
+          "status": "running",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\",\"content\":\"fixture content\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt",
+            "content": "fixture content"
+          },
+          "startedAt": 1790051347088
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 4
+        }
+      }
+    ],
+    [
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 3,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "write-projection",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347086,
+          "createdAtSeq": 6,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr60_e13e9110-801f-4b6d-ac2e-22729cb88250",
+          "toolCallId": "write-projection",
+          "toolName": "Write",
+          "status": "success",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\",\"content\":\"fixture content\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt",
+            "content": "fixture content"
+          },
+          "startedAt": 1790051347088,
+          "output": {
+            "text": "File created successfully at: /fixture/workspace/note.txt (file state is current in your context — no need to Read it back)"
+          },
+          "endedAt": 1790051347090
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 5
+        }
+      }
+    ],
+    [],
+    [],
+    [],
+    [],
+    [
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 1,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "running",
+          "startedAt": 1790051347070,
+          "fileChanges": {
+            "additions": 1,
+            "deletions": 0,
+            "files": 1,
+            "state": "active"
+          }
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "usage": {
+            "contextWindow": {
+              "usedTokens": 2,
+              "maxTokens": 128000,
+              "autoCompactThresholdTokens": null,
+              "cache": {
+                "inputTokens": 1,
+                "cacheReadTokens": 0,
+                "cacheWriteTokens": 0,
+                "latestHitRate": 0,
+                "hitRate": 0,
+                "hitRateRequestCount": 2,
+                "totalInputTokens": 2,
+                "totalCacheReadTokens": 0,
+                "totalCacheWriteTokens": 0
+              },
+              "breakdown": [
+                {
+                  "source": "system_prompt",
+                  "chars": 7532
+                },
+                {
+                  "source": "meta_user_context",
+                  "chars": 41
+                },
+                {
+                  "source": "system_tool_schemas",
+                  "chars": 56450
+                },
+                {
+                  "source": "messages",
+                  "chars": 487
+                }
+              ]
+            },
+            "cumulative": {
+              "inputTokens": 2,
+              "outputTokens": 2,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            }
+          },
+          "revision": 6
+        }
+      }
+    ],
+    [
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 1,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "completedSuccess",
+          "startedAt": 1790051347070,
+          "fileChanges": {
+            "additions": 1,
+            "deletions": 0,
+            "files": 1,
+            "state": "active"
+          },
+          "endedAt": 1790051347098,
+          "activeMs": 39,
+          "historyRoundCount": 2
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "control": {
+            "phase": "completedSuccess",
+            "sessionEnded": true,
+            "canStop": false,
+            "stopState": "idle",
+            "stopTargetKind": "unknown",
+            "activeWorks": [],
+            "lastError": null,
+            "apiRetry": null
+          },
+          "availability": {
+            "fork": {
+              "allowed": true
+            },
+            "compact": {
+              "allowed": true
+            },
+            "switchModelConfig": {
+              "allowed": true
+            },
+            "setFollowupMode": {
+              "allowed": true
+            },
+            "queueEdit": {
+              "allowed": true
+            },
+            "sendQueuedNow": {
+              "allowed": false,
+              "reasonCode": "sendQueuedNowRequiresRunning"
+            },
+            "pauseGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToPause"
+            },
+            "resumeGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToResume"
+            }
+          },
+          "inputRouting": {
+            "mode": "startNow"
+          }
+        }
+      },
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 1,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "completedSuccess",
+          "startedAt": 1790051347070,
+          "fileChanges": {
+            "additions": 1,
+            "deletions": 0,
+            "files": 1,
+            "state": "active"
+          },
+          "endedAt": 1790051347098,
+          "activeMs": 39,
+          "historyRoundCount": 2,
+          "actions": {
+            "canRewindFiles": true
+          }
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 7
+        }
+      }
+    ],
+    [
+      {
+        "op": "row.appended",
+        "row": {
+          "rowId": 4,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347100,
+          "createdAtSeq": 18,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "running",
+          "startedAt": 1790051347100
+        }
+      },
+      {
+        "op": "row.appended",
+        "row": {
+          "rowId": 5,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347100,
+          "createdAtSeq": 18,
+          "kind": "userInput",
+          "text": "Read note.txt",
+          "origin": "realUser"
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "control": {
+            "phase": "running",
+            "sessionEnded": false,
+            "canStop": true,
+            "stopState": "stoppable",
+            "stopTargetKind": "assistant",
+            "activeWorks": [
+              {
+                "kind": "primaryTurn",
+                "foregroundExecutionId": "runtime_command_2",
+                "startedAt": 1790051347100
+              }
+            ],
+            "lastError": null,
+            "apiRetry": null
+          },
+          "availability": {
+            "fork": {
+              "allowed": true
+            },
+            "compact": {
+              "allowed": true
+            },
+            "switchModelConfig": {
+              "allowed": true
+            },
+            "setFollowupMode": {
+              "allowed": true
+            },
+            "queueEdit": {
+              "allowed": true
+            },
+            "sendQueuedNow": {
+              "allowed": true
+            },
+            "pauseGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToPause"
+            },
+            "resumeGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToResume"
+            }
+          },
+          "inputRouting": {
+            "mode": "enqueue"
+          }
+        }
+      },
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 1,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "completedSuccess",
+          "startedAt": 1790051347070,
+          "fileChanges": {
+            "additions": 1,
+            "deletions": 0,
+            "files": 1,
+            "state": "active"
+          },
+          "endedAt": 1790051347098,
+          "activeMs": 39,
+          "historyRoundCount": 2
+        }
+      },
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 2,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "userInput",
+          "text": "Write fixture content to note.txt",
+          "origin": "realUser"
+        }
+      },
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 5,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347100,
+          "createdAtSeq": 18,
+          "kind": "userInput",
+          "text": "Read note.txt",
+          "origin": "realUser",
+          "actions": {
+            "canEdit": true,
+            "editDisposition": "rewind"
+          }
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 8
+        }
+      }
+    ],
+    [
+      {
+        "op": "state.updated",
+        "patch": {
+          "usage": {
+            "contextWindow": {
+              "usedTokens": 2,
+              "maxTokens": 128000,
+              "autoCompactThresholdTokens": null,
+              "cache": {
+                "inputTokens": 1,
+                "cacheReadTokens": 0,
+                "cacheWriteTokens": 0,
+                "latestHitRate": 0,
+                "hitRate": 0,
+                "hitRateRequestCount": 3,
+                "totalInputTokens": 3,
+                "totalCacheReadTokens": 0,
+                "totalCacheWriteTokens": 0
+              },
+              "breakdown": [
+                {
+                  "source": "system_prompt",
+                  "chars": 7532
+                },
+                {
+                  "source": "meta_user_context",
+                  "chars": 41
+                },
+                {
+                  "source": "system_tool_schemas",
+                  "chars": 56450
+                },
+                {
+                  "source": "messages",
+                  "chars": 590
+                }
+              ]
+            },
+            "cumulative": {
+              "inputTokens": 3,
+              "outputTokens": 3,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            }
+          }
+        }
+      }
+    ],
+    [],
+    [
+      {
+        "op": "row.appended",
+        "row": {
+          "rowId": 6,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "read-projection",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347103,
+          "createdAtSeq": 22,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr6m_fb8f279f-5cc4-42e5-94a0-79a31bd6085b",
+          "toolCallId": "read-projection",
+          "toolName": "Read",
+          "status": "inputStreaming",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt"
+          }
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 9
+        }
+      }
+    ],
+    [],
+    [],
+    [
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 6,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "read-projection",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347103,
+          "createdAtSeq": 22,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr6m_fb8f279f-5cc4-42e5-94a0-79a31bd6085b",
+          "toolCallId": "read-projection",
+          "toolName": "Read",
+          "status": "running",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt"
+          },
+          "startedAt": 1790051347104
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 10
+        }
+      }
+    ],
+    [
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 6,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "read-projection",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347103,
+          "createdAtSeq": 22,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr6m_fb8f279f-5cc4-42e5-94a0-79a31bd6085b",
+          "toolCallId": "read-projection",
+          "toolName": "Read",
+          "status": "success",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt"
+          },
+          "startedAt": 1790051347104,
+          "output": {
+            "text": "Wasted call — file unchanged since your last Read. Refer to that earlier tool_result instead."
+          },
+          "endedAt": 1790051347105
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 11
+        }
+      }
+    ],
+    [],
+    [],
+    [],
+    [
+      {
+        "op": "state.updated",
+        "patch": {
+          "usage": {
+            "contextWindow": {
+              "usedTokens": 2,
+              "maxTokens": 128000,
+              "autoCompactThresholdTokens": null,
+              "cache": {
+                "inputTokens": 1,
+                "cacheReadTokens": 0,
+                "cacheWriteTokens": 0,
+                "latestHitRate": 0,
+                "hitRate": 0,
+                "hitRateRequestCount": 4,
+                "totalInputTokens": 4,
+                "totalCacheReadTokens": 0,
+                "totalCacheWriteTokens": 0
+              },
+              "breakdown": [
+                {
+                  "source": "system_prompt",
+                  "chars": 7532
+                },
+                {
+                  "source": "meta_user_context",
+                  "chars": 41
+                },
+                {
+                  "source": "system_tool_schemas",
+                  "chars": 56450
+                },
+                {
+                  "source": "messages",
+                  "chars": 926
+                }
+              ]
+            },
+            "cumulative": {
+              "inputTokens": 4,
+              "outputTokens": 4,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            }
+          }
+        }
+      }
+    ],
+    [
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 4,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347100,
+          "createdAtSeq": 18,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "completedSuccess",
+          "startedAt": 1790051347100,
+          "endedAt": 1790051347110,
+          "activeMs": 11,
+          "historyRoundCount": 2
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "control": {
+            "phase": "completedSuccess",
+            "sessionEnded": true,
+            "canStop": false,
+            "stopState": "idle",
+            "stopTargetKind": "unknown",
+            "activeWorks": [],
+            "lastError": null,
+            "apiRetry": null
+          },
+          "availability": {
+            "fork": {
+              "allowed": true
+            },
+            "compact": {
+              "allowed": true
+            },
+            "switchModelConfig": {
+              "allowed": true
+            },
+            "setFollowupMode": {
+              "allowed": true
+            },
+            "queueEdit": {
+              "allowed": true
+            },
+            "sendQueuedNow": {
+              "allowed": false,
+              "reasonCode": "sendQueuedNowRequiresRunning"
+            },
+            "pauseGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToPause"
+            },
+            "resumeGoal": {
+              "allowed": false,
+              "reasonCode": "noGoalToResume"
+            }
+          },
+          "inputRouting": {
+            "mode": "startNow"
+          }
+        }
+      },
+      {
+        "op": "row.upserted",
+        "row": {
+          "rowId": 1,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "completedSuccess",
+          "startedAt": 1790051347070,
+          "fileChanges": {
+            "additions": 1,
+            "deletions": 0,
+            "files": 1,
+            "state": "active"
+          },
+          "endedAt": 1790051347098,
+          "activeMs": 39,
+          "historyRoundCount": 2,
+          "actions": {
+            "canRewindFiles": true
+          }
+        }
+      },
+      {
+        "op": "state.updated",
+        "patch": {
+          "revision": 12
+        }
+      }
+    ]
+  ],
+  "snapshot": {
+    "protocolVersion": 1,
+    "sessionId": "fixture-session",
+    "logEpoch": "fixture-epoch",
+    "seq": 32,
+    "revision": 12,
+    "control": {
+      "phase": "completedSuccess",
+      "sessionEnded": true,
+      "canStop": false,
+      "stopState": "idle",
+      "stopTargetKind": "unknown",
+      "activeWorks": [],
+      "lastError": null,
+      "apiRetry": null
+    },
+    "availability": {
+      "fork": {
+        "allowed": true
+      },
+      "compact": {
+        "allowed": true
+      },
+      "switchModelConfig": {
+        "allowed": true
+      },
+      "setFollowupMode": {
+        "allowed": true
+      },
+      "queueEdit": {
+        "allowed": true
+      },
+      "sendQueuedNow": {
+        "allowed": false,
+        "reasonCode": "sendQueuedNowRequiresRunning"
+      },
+      "pauseGoal": {
+        "allowed": false,
+        "reasonCode": "noGoalToPause"
+      },
+      "resumeGoal": {
+        "allowed": false,
+        "reasonCode": "noGoalToResume"
+      }
+    },
+    "inputRouting": {
+      "mode": "startNow"
+    },
+    "meta": {
+      "title": "Write fixture content to note.txt",
+      "titleSource": "generated"
+    },
+    "config": {
+      "provider": "",
+      "model": "",
+      "thought": "",
+      "thoughtLevels": [],
+      "followupMode": "queue",
+      "mode": "build"
+    },
+    "modelTransition": null,
+    "usage": {
+      "contextWindow": {
+        "usedTokens": 2,
+        "maxTokens": 128000,
+        "autoCompactThresholdTokens": null,
+        "cache": {
+          "inputTokens": 1,
+          "cacheReadTokens": 0,
+          "cacheWriteTokens": 0,
+          "latestHitRate": 0,
+          "hitRate": 0,
+          "hitRateRequestCount": 4,
+          "totalInputTokens": 4,
+          "totalCacheReadTokens": 0,
+          "totalCacheWriteTokens": 0
+        },
+        "breakdown": [
+          {
+            "source": "system_prompt",
+            "chars": 7532
+          },
+          {
+            "source": "meta_user_context",
+            "chars": 41
+          },
+          {
+            "source": "system_tool_schemas",
+            "chars": 56450
+          },
+          {
+            "source": "messages",
+            "chars": 926
+          }
+        ]
+      },
+      "cumulative": {
+        "inputTokens": 4,
+        "outputTokens": 4,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      }
+    },
+    "queue": {
+      "items": [],
+      "autoDrain": true
+    },
+    "pendingInteractions": [],
+    "pendingCommands": [],
+    "backgroundWorks": [],
+    "subagents": {
+      "revision": 0,
+      "childSessionIds": [],
+      "running": [],
+      "endedTotal": 0
+    },
+    "goal": null,
+    "plan": null,
+    "workspaceHookAdmission": null,
+    "rows": {
+      "window": [
+        {
+          "rowId": 1,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "completedSuccess",
+          "startedAt": 1790051347070,
+          "fileChanges": {
+            "additions": 1,
+            "deletions": 0,
+            "files": 1,
+            "state": "active"
+          },
+          "endedAt": 1790051347098,
+          "activeMs": 39,
+          "historyRoundCount": 2,
+          "actions": {
+            "canRewindFiles": true
+          }
+        },
+        {
+          "rowId": 2,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347070,
+          "createdAtSeq": 2,
+          "kind": "userInput",
+          "text": "Write fixture content to note.txt",
+          "origin": "realUser"
+        },
+        {
+          "rowId": 3,
+          "turnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "entityId": "write-projection",
+          "productTurnId": "msg_muc6cr5q_f4caaa19-40ab-4f4a-ad99-562c06ecbe5b",
+          "visibility": "visible",
+          "createdAt": 1790051347086,
+          "createdAtSeq": 6,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr60_e13e9110-801f-4b6d-ac2e-22729cb88250",
+          "toolCallId": "write-projection",
+          "toolName": "Write",
+          "status": "success",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\",\"content\":\"fixture content\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt",
+            "content": "fixture content"
+          },
+          "startedAt": 1790051347088,
+          "output": {
+            "text": "File created successfully at: /fixture/workspace/note.txt (file state is current in your context — no need to Read it back)"
+          },
+          "endedAt": 1790051347090
+        },
+        {
+          "rowId": 4,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347100,
+          "createdAtSeq": 18,
+          "kind": "turnHeader",
+          "origin": "userInput",
+          "executionKind": "agent",
+          "state": "completedSuccess",
+          "startedAt": 1790051347100,
+          "endedAt": 1790051347110,
+          "activeMs": 11,
+          "historyRoundCount": 2
+        },
+        {
+          "rowId": 5,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347100,
+          "createdAtSeq": 18,
+          "kind": "userInput",
+          "text": "Read note.txt",
+          "origin": "realUser",
+          "actions": {
+            "canEdit": true,
+            "editDisposition": "rewind"
+          }
+        },
+        {
+          "rowId": 6,
+          "turnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "entityId": "read-projection",
+          "productTurnId": "msg_muc6cr6k_1f1c025f-21d4-4741-9535-622840f9c41b",
+          "visibility": "visible",
+          "createdAt": 1790051347103,
+          "createdAtSeq": 22,
+          "kind": "toolCall",
+          "assistantResponseId": "msg_muc6cr6m_fb8f279f-5cc4-42e5-94a0-79a31bd6085b",
+          "toolCallId": "read-projection",
+          "toolName": "Read",
+          "status": "success",
+          "inputText": "{\"file_path\":\"/fixture/workspace/note.txt\"}",
+          "input": {
+            "file_path": "/fixture/workspace/note.txt"
+          },
+          "startedAt": 1790051347104,
+          "output": {
+            "text": "Wasted call — file unchanged since your last Read. Refer to that earlier tool_result instead."
+          },
+          "endedAt": 1790051347105
+        }
+      ],
+      "totalCount": 6,
+      "firstRowId": 1
+    }
+  }
+}

@@ -27,6 +27,7 @@ export function placeRuntimePackage({ packageName, packageDirectory, fromAssetPa
 export const resolveRuntimePackageDirectory = async ({
   fromDirectory,
   packageName,
+  requireCompiledWorkspacePackage = true,
   root,
   workspacePackageDirectories,
 }) => {
@@ -34,7 +35,10 @@ export const resolveRuntimePackageDirectory = async ({
   if (workspacePackageDirectory) {
     const directory = workspacePackageDirectory;
     await assertPackageDirectory(packageName, directory);
-    if (!(await exists(resolve(directory, "dist", "index.js")))) {
+    if (
+      requireCompiledWorkspacePackage &&
+      !(await exists(resolve(directory, "dist", "index.js")))
+    ) {
       throw new Error(`Missing ${packageName} dist files. Run \`pnpm build\` before \`pnpm sea\`.`);
     }
     return directory;

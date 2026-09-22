@@ -6,18 +6,22 @@ import type {
   McpServerConfig,
   McpServerRuntimeSource,
   PluginDiagnostic,
-  PluginManifest,
   PluginOptionValues,
 } from "@zcode/contracts";
 import { ZCODE_OFFICIAL_PLUGIN_MARKETPLACE } from "@zcode/contracts";
 import { ZCODE_PLUGIN_ID_ENV_KEY } from "@zcode/shared";
 import type { LoadedPlugin } from "./types.js";
-import { isNotFoundError, isPluginOptionValue, isRecord, resolveInside } from "./helpers.js";
+import { isNotFoundError, isRecord, resolveInside } from "./helpers.js";
 import { buildOfficialProvenance, parseZCodeOfficialAuth } from "./mcp-official-auth.js";
+import {
+  createPluginMcpVariableContext,
+  PluginMcpVariableError,
+  resolvePluginMcpStringRecord,
+  resolvePluginMcpTemplate,
+  type PluginMcpVariableContext,
+} from "./mcp-template.js";
 
 const SUPPORTED_MCP_TYPES = new Set(["stdio", "http", "sse"]);
-const TEMPLATE_PATTERN = /\$\{([^}]+)\}/g;
-const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function loadPluginMcpServerDefinitions(input: {
   diagnostics: PluginDiagnostic[];
@@ -38,7 +42,7 @@ export function resolvePluginMcpServers(input: {
   workingDirectory: string;
 }): Record<string, McpServerConfig> {
   const merged = input.definitions ?? loadPluginMcpServerDefinitions(input);
-  const context = createVariableContext(input);
+  const context = createPluginMcpVariableContext(input);
   const result: Record<string, McpServerConfig> = {};
 
   for (const [name, server] of Object.entries(merged)) {
@@ -50,7 +54,7 @@ export function resolvePluginMcpServers(input: {
     } catch (error) {
       input.diagnostics.push({
         code:
-          error instanceof PluginVariableError
+          error instanceof PluginMcpVariableError
             ? "plugin_variable_missing"
             : "plugin_mcp_server_disabled",
         message: error instanceof Error ? error.message : `Invalid MCP server: ${name}`,
@@ -139,43 +143,9 @@ function normalizeMcpServersShape(
   return Object.fromEntries(Object.entries(servers).filter(([, config]) => isRecord(config)));
 }
 
-interface VariableContext {
-  dataPath: string;
-  env: Record<string, string | undefined>;
-  loaded: LoadedPlugin;
-  options: PluginOptionValues;
-  userConfigDefaults: PluginOptionValues;
-  workingDirectory: string;
-}
-
-function createVariableContext(input: {
-  dataPath: string;
-  env: Record<string, string | undefined>;
-  loaded: LoadedPlugin;
-  options: PluginOptionValues;
-  workingDirectory: string;
-}): VariableContext {
-  return {
-    dataPath: input.dataPath,
-    env: input.env,
-    loaded: input.loaded,
-    options: input.options,
-    userConfigDefaults: getUserConfigDefaults(input.loaded.manifest),
-    workingDirectory: input.workingDirectory,
-  };
-}
-
-function getUserConfigDefaults(manifest: PluginManifest): PluginOptionValues {
-  const defaults: PluginOptionValues = {};
-  for (const [key, option] of Object.entries(manifest.userConfig ?? {})) {
-    if (isPluginOptionValue(option.default)) defaults[key] = option.default;
-  }
-  return defaults;
-}
-
 function resolveMcpServerConfig(
   server: unknown,
-  context: VariableContext,
+  context: PluginMcpVariableContext,
   identity: { mcpKey: string; pluginId: string },
 ): McpServerConfig {
   if (!isRecord(server)) throw new Error("MCP server config must be an object");
@@ -206,7 +176,7 @@ function resolveMcpServerConfig(
         `MCP server ${identity.mcpKey}: ${officialAuth.type} auth cannot be combined with oauth`,
       );
     }
-    const env = resolveStringRecord(
+    const env = resolvePluginMcpStringRecord(
       {
         CLAUDE_PROJECT_DIR: context.workingDirectory,
         ZCODE_PLUGIN_DATA: context.dataPath,
@@ -225,15 +195,15 @@ function resolveMcpServerConfig(
     env[ZCODE_PLUGIN_ID_ENV_KEY] = context.loaded.id;
     return {
       type: "stdio",
-      command: resolveTemplate(command, context, { allowSensitive: false }),
+      command: resolvePluginMcpTemplate(command, context, { allowSensitive: false }),
       args: Array.isArray(server.args)
         ? server.args
             .filter((arg): arg is string => typeof arg === "string")
-            .map((arg) => resolveTemplate(arg, context, { allowSensitive: false }))
+            .map((arg) => resolvePluginMcpTemplate(arg, context, { allowSensitive: false }))
         : undefined,
       cwd:
         typeof server.cwd === "string"
-          ? resolveTemplate(server.cwd, context, { allowSensitive: false })
+          ? resolvePluginMcpTemplate(server.cwd, context, { allowSensitive: false })
           : undefined,
       enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
       env,
@@ -251,7 +221,7 @@ function resolveMcpServerConfig(
 
   const url = requireString(server.url, `${type} MCP server requires url`);
   const headers = isRecord(server.headers)
-    ? resolveStringRecord(server.headers, context, { allowSensitive: true })
+    ? resolvePluginMcpStringRecord(server.headers, context, { allowSensitive: true })
     : undefined;
   const oauth = resolveMcpOAuthConfig(server.oauth, context);
 
@@ -272,7 +242,7 @@ function resolveMcpServerConfig(
     }
     return {
       type: "http",
-      url: resolveTemplate(url, context, { allowSensitive: false }),
+      url: resolvePluginMcpTemplate(url, context, { allowSensitive: false }),
       enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
       headers,
       auth: officialAuth,
@@ -285,7 +255,7 @@ function resolveMcpServerConfig(
 
   return {
     type,
-    url: resolveTemplate(url, context, { allowSensitive: false }),
+    url: resolvePluginMcpTemplate(url, context, { allowSensitive: false }),
     enabled: typeof server.enabled === "boolean" ? server.enabled : undefined,
     headers,
     oauth,
@@ -299,30 +269,32 @@ function resolveMcpServerConfig(
  */
 function resolveMcpOAuthConfig(
   value: unknown,
-  context: VariableContext,
+  context: PluginMcpVariableContext,
 ): McpOAuthConfig | undefined {
   if (!isRecord(value)) return undefined;
   if (value.type === "client_credentials") {
     return {
       type: "client_credentials",
-      clientId: resolveTemplate(
+      clientId: resolvePluginMcpTemplate(
         requireString(value.clientId, "MCP OAuth client_credentials requires clientId"),
         context,
         { allowSensitive: false },
       ),
-      clientSecret: resolveTemplate(
+      clientSecret: resolvePluginMcpTemplate(
         requireString(value.clientSecret, "MCP OAuth client_credentials requires clientSecret"),
         context,
         { allowSensitive: true },
       ),
       ...(typeof value.clientName === "string"
         ? {
-            clientName: resolveTemplate(value.clientName, context, { allowSensitive: false }),
+            clientName: resolvePluginMcpTemplate(value.clientName, context, {
+              allowSensitive: false,
+            }),
           }
         : {}),
       ...(typeof value.scope === "string"
         ? {
-            scope: resolveTemplate(value.scope, context, { allowSensitive: false }),
+            scope: resolvePluginMcpTemplate(value.scope, context, { allowSensitive: false }),
           }
         : {}),
     };
@@ -332,27 +304,33 @@ function resolveMcpOAuthConfig(
       type: "authorization_code",
       ...(typeof value.clientId === "string"
         ? {
-            clientId: resolveTemplate(value.clientId, context, { allowSensitive: false }),
+            clientId: resolvePluginMcpTemplate(value.clientId, context, { allowSensitive: false }),
           }
         : {}),
       ...(typeof value.clientSecret === "string"
         ? {
-            clientSecret: resolveTemplate(value.clientSecret, context, { allowSensitive: true }),
+            clientSecret: resolvePluginMcpTemplate(value.clientSecret, context, {
+              allowSensitive: true,
+            }),
           }
         : {}),
       ...(typeof value.clientName === "string"
         ? {
-            clientName: resolveTemplate(value.clientName, context, { allowSensitive: false }),
+            clientName: resolvePluginMcpTemplate(value.clientName, context, {
+              allowSensitive: false,
+            }),
           }
         : {}),
       ...(typeof value.redirectPath === "string"
         ? {
-            redirectPath: resolveTemplate(value.redirectPath, context, { allowSensitive: false }),
+            redirectPath: resolvePluginMcpTemplate(value.redirectPath, context, {
+              allowSensitive: false,
+            }),
           }
         : {}),
       ...(typeof value.scope === "string"
         ? {
-            scope: resolveTemplate(value.scope, context, { allowSensitive: false }),
+            scope: resolvePluginMcpTemplate(value.scope, context, { allowSensitive: false }),
           }
         : {}),
     };
@@ -368,81 +346,3 @@ function requireString(value: unknown, message: string): string {
   if (typeof value === "string" && value.length > 0) return value;
   throw new Error(message);
 }
-
-function resolveStringRecord(
-  record: Record<string, unknown>,
-  context: VariableContext,
-  options: { allowSensitive: boolean },
-): Record<string, string> {
-  const result: Record<string, string> = {};
-  for (const [key, value] of Object.entries(record)) {
-    if (typeof value === "string") result[key] = resolveTemplate(value, context, options);
-  }
-  return result;
-}
-
-function resolveTemplate(
-  value: string,
-  context: VariableContext,
-  options: { allowSensitive: boolean },
-): string {
-  return value.replace(TEMPLATE_PATTERN, (match, name: string) => {
-    switch (name) {
-      case "CLAUDE_PLUGIN_ROOT":
-      case "ZCODE_PLUGIN_ROOT":
-        return context.loaded.rootPath;
-      case "CLAUDE_PLUGIN_DATA":
-      case "ZCODE_PLUGIN_DATA":
-        return context.dataPath;
-      case "CLAUDE_PROJECT_DIR":
-      case "ZCODE_PROJECT_DIR":
-        return context.workingDirectory;
-      case "CLAUDE_CODE_SESSION_ID":
-      case "CLAUDE_SESSION_ID":
-      case "ZCODE_SESSION_ID":
-        throw new PluginVariableError(
-          `Plugin variable requires a runtime session context: ${name}`,
-        );
-      case "CLAUDE_SKILL_DIR":
-      case "ZCODE_SKILL_DIR":
-        throw new PluginVariableError(`Plugin variable requires a skill context: ${name}`);
-      default:
-        break;
-    }
-
-    if (name.startsWith("user_config.")) {
-      const key = name.slice("user_config.".length);
-      if (
-        context.loaded.manifest.userConfig?.[key]?.sensitive === true &&
-        !options.allowSensitive
-      ) {
-        throw new PluginVariableError(
-          `Sensitive plugin user_config value cannot be used in this field: ${key}`,
-        );
-      }
-      const configValue = context.options[key] ?? context.userConfigDefaults[key];
-      if (configValue === undefined) {
-        throw new PluginVariableError(`Missing plugin user_config value: ${key}`);
-      }
-      return String(configValue);
-    }
-    if (name.startsWith("ZCODE_")) {
-      const envValue = context.env[name];
-      if (envValue === undefined)
-        throw new PluginVariableError(`Missing environment variable: ${name}`);
-      return envValue;
-    }
-    if (options.allowSensitive && ENVIRONMENT_VARIABLE_NAME_PATTERN.test(name)) {
-
-      // token。只在敏感 sink 解析，避免 secret 被展开到 args、URL 或其它可见字段。
-      const envValue = context.env[name];
-      if (envValue === undefined)
-        throw new PluginVariableError(`Missing environment variable: ${name}`);
-      return envValue;
-    }
-
-    return match;
-  });
-}
-
-class PluginVariableError extends Error {}

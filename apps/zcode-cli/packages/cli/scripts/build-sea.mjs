@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, chmod, copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -21,7 +21,7 @@ import {
   targetParts,
 } from "./sea-targets.mjs";
 import { removeWindowsAuthenticodeSignature } from "./windows-authenticode.mjs";
-import { collectSeaTuiAssets } from "./sea-tui-assets.mjs";
+import { collectSeaTuiAssets, collectSeaTuiExternalWorkspaceBuilds } from "./sea-tui-assets.mjs";
 import { collectSeaOfficialPluginAssets } from "./sea-official-plugin-assets.mjs";
 import { collectSeaRuntimeToolAssets } from "./sea-runtime-tool-assets.mjs";
 import { prepareSeaRuntimeToolAssets } from "./sea-runtime-tool-prepare.mjs";
@@ -62,6 +62,7 @@ const seaConfigForTarget = (target) => resolve(dist, `sea-config-${target}.json`
 const seaAssetStagingForTarget = (target) => resolve(dist, "sea-assets", target);
 const nodeCache = resolve(dist, "sea-node-cache");
 const sentinelFusePrefix = "NODE_SEA_FUSE_";
+let seaTuiWorkspaceBuilds;
 
 export const resolvePostjectBin = ({
   platform = process.platform,
@@ -137,9 +138,54 @@ const resolveNodeBinary = async ({ nodeBinaries, nodeVersion, target }) => {
   });
 };
 
+const prepareSeaTuiWorkspaceBuilds = async (target) => {
+  if (!seaTuiWorkspaceBuilds) {
+    seaTuiWorkspaceBuilds = (async () => {
+      const workspacePackages = await collectSeaTuiExternalWorkspaceBuilds({ root, target });
+      for (const { packageDirectory, packageName } of workspacePackages) {
+        const packageJson = JSON.parse(
+          await readFile(resolve(packageDirectory, "package.json"), "utf8"),
+        );
+        const buildScript = packageJson.scripts?.build;
+        if (typeof buildScript === "string" && buildScript.trim() !== "") {
+          console.log(`[sea] building workspace runtime package ${packageName}`);
+          run("pnpm", ["--filter", packageName, "build"], { cwd: repositoryRoot });
+        } else {
+          const tsconfigPath = resolve(packageDirectory, "tsconfig.json");
+          if (!(await buildFileExists(tsconfigPath))) {
+            throw new Error(
+              `Missing build script or tsconfig.json for SEA workspace runtime package ${packageName}.`,
+            );
+          }
+          console.log(`[sea] compiling workspace runtime package ${packageName}`);
+          run("pnpm", ["exec", "tsc", "--project", tsconfigPath], { cwd: repositoryRoot });
+        }
+
+        if (!(await buildFileExists(resolve(packageDirectory, "dist", "index.js")))) {
+          throw new Error(
+            `Workspace runtime package ${packageName} did not produce dist/index.js for SEA packaging.`,
+          );
+        }
+      }
+    })();
+  }
+  return seaTuiWorkspaceBuilds;
+};
+
+const buildFileExists = async (path) => {
+  try {
+    await access(path);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+};
+
 const prepareSeaBlob = async (target, nodeVersion) => {
   const seaBlob = seaBlobForTarget(target);
   const seaConfig = seaConfigForTarget(target);
+  await prepareSeaTuiWorkspaceBuilds(target);
   await prepareSeaRuntimeToolAssets({
     root: repositoryRoot,
     target,
@@ -167,7 +213,11 @@ const prepareSeaBlob = async (target, nodeVersion) => {
       target,
     });
   const providerConfigAssets = await collectSeaProviderConfigAssets({ root: repositoryRoot });
-  const nodeLicensePath = await stageNodeNotices(seaAssetStagingForTarget(`${target}-node`), nodeVersion, repositoryRoot);
+  const nodeLicensePath = await stageNodeNotices(
+    seaAssetStagingForTarget(`${target}-node`),
+    nodeVersion,
+    repositoryRoot,
+  );
 
   await writeFile(
     seaConfig,

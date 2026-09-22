@@ -1,15 +1,8 @@
 // File Config Adapter - Load and patch JSON configuration files
 
-import {
-  existsSync,
-  readFileSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { RuntimeConfigPatch, UiLocale } from "@zcode/contracts";
 import { z } from "zod";
 import {
@@ -20,6 +13,14 @@ import {
   pluginIdAliases,
   type ConfigDiagnostic,
 } from "./schema.js";
+import {
+  isConfigRecord,
+  patchPluginEnabledConfig,
+  patchPluginOptionsConfig,
+  patchPluginRemovedConfig,
+  patchUiLocaleConfig,
+} from "./file-config-patches.js";
+import { atomicWriteJsonConfig, readJsonConfigFileOrEmpty } from "./file-config-io.js";
 
 interface FileConfigOptions {
   baseDir?: string;
@@ -118,12 +119,12 @@ export function loadFileConfig(filePath?: string, options: FileConfigOptions = {
 }
 
 function migratePluginConfigInFile(value: unknown): Record<string, unknown> | undefined {
-  if (!isRecord(value) || !isRecord(value.plugins)) return undefined;
+  if (!isConfigRecord(value) || !isConfigRecord(value.plugins)) return undefined;
   const plugins = value.plugins;
   const nextPlugins = { ...plugins };
   let changed = false;
 
-  if (isRecord(plugins.enabledPlugins)) {
+  if (isConfigRecord(plugins.enabledPlugins)) {
     const enabledPlugins = { ...plugins.enabledPlugins };
     for (const [id, enabled] of Object.entries(plugins.enabledPlugins)) {
       if (id === LEGACY_CUA_PLUGIN_ID) {
@@ -146,7 +147,7 @@ function migratePluginConfigInFile(value: unknown): Record<string, unknown> | un
     }
   }
 
-  if (isRecord(plugins.options)) {
+  if (isConfigRecord(plugins.options)) {
     const options = { ...plugins.options };
     for (const [id, pluginOptions] of Object.entries(plugins.options)) {
       if (id === LEGACY_CUA_PLUGIN_ID) {
@@ -162,10 +163,7 @@ function migratePluginConfigInFile(value: unknown): Record<string, unknown> | un
   return changed ? { ...value, plugins: nextPlugins } : undefined;
 }
 
-function persistPluginConfigMigration(
-  filePath: string,
-  value: Record<string, unknown>,
-): void {
+function persistPluginConfigMigration(filePath: string, value: Record<string, unknown>): void {
   const tempPath = `${filePath}.migrate.${process.pid}.${Date.now()}.tmp`;
   try {
     writeFileSync(tempPath, `${JSON.stringify(value, null, 2)}\n`, {
@@ -225,9 +223,9 @@ export async function updateUiLocaleInFileConfig(
 ): Promise<UiLocalePatchResult> {
   const resolvedPath = resolvePath(filePath);
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const next = patchUiLocale(parsed, locale);
+  const next = patchUiLocaleConfig(parsed, locale);
 
-  await atomicWriteJson(resolvedPath, next);
+  await atomicWriteJsonConfig(resolvedPath, next);
   return {
     locale,
     path: resolvedPath,
@@ -244,9 +242,9 @@ export async function updatePluginEnabledInFileConfig(
 ): Promise<PluginEnabledPatchResult> {
   const resolvedPath = resolvePath(filePath);
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const next = patchPluginEnabled(parsed, pluginId, enabled);
+  const next = patchPluginEnabledConfig(parsed, pluginId, enabled);
 
-  await atomicWriteJson(resolvedPath, next);
+  await atomicWriteJsonConfig(resolvedPath, next);
   return {
     enabled,
     path: resolvedPath,
@@ -270,8 +268,8 @@ export async function enablePluginsByDefaultInFileConfig(
     return { enabledIds: [], path: resolvedPath };
   }
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
-  const enabledPlugins = isRecord(plugins.enabledPlugins) ? plugins.enabledPlugins : {};
+  const plugins = isConfigRecord(parsed.plugins) ? parsed.plugins : {};
+  const enabledPlugins = isConfigRecord(plugins.enabledPlugins) ? plugins.enabledPlugins : {};
   const enabledIds = pluginIds.filter(
     (id) => !Object.prototype.hasOwnProperty.call(enabledPlugins, id),
   );
@@ -288,7 +286,7 @@ export async function enablePluginsByDefaultInFileConfig(
       },
     },
   };
-  await atomicWriteJson(resolvedPath, next);
+  await atomicWriteJsonConfig(resolvedPath, next);
   return { enabledIds, path: resolvedPath };
 }
 
@@ -303,9 +301,9 @@ export async function updatePluginOptionsInFileConfig(
 ): Promise<PluginOptionsPatchResult> {
   const resolvedPath = resolvePath(filePath);
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const next = patchPluginOptions(parsed, pluginId, options, clearOptionKeys);
+  const next = patchPluginOptionsConfig(parsed, pluginId, options, clearOptionKeys);
 
-  await atomicWriteJson(resolvedPath, next);
+  await atomicWriteJsonConfig(resolvedPath, next);
   return {
     clearedOptionKeys: clearOptionKeys,
     options,
@@ -328,10 +326,10 @@ export async function removePluginFromFileConfig(
 ): Promise<PluginRemovePatchResult> {
   const resolvedPath = resolvePath(filePath);
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const { next, removedEnabled, removedOptions } = patchPluginRemoved(parsed, pluginId);
+  const { next, removedEnabled, removedOptions } = patchPluginRemovedConfig(parsed, pluginId);
 
   if (removedEnabled || removedOptions) {
-    await atomicWriteJson(resolvedPath, next);
+    await atomicWriteJsonConfig(resolvedPath, next);
   }
   return {
     path: resolvedPath,
@@ -353,8 +351,8 @@ export async function removePluginEnabledFromFileConfig(
 ): Promise<{ path: string; pluginId: string; removedEnabled: boolean }> {
   const resolvedPath = resolvePath(filePath);
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
-  const enabledPlugins = isRecord(plugins.enabledPlugins) ? plugins.enabledPlugins : {};
+  const plugins = isConfigRecord(parsed.plugins) ? parsed.plugins : {};
+  const enabledPlugins = isConfigRecord(plugins.enabledPlugins) ? plugins.enabledPlugins : {};
   const aliases = pluginIdAliases(pluginId);
   const removedEnabled = aliases.some((id) =>
     Object.prototype.hasOwnProperty.call(enabledPlugins, id),
@@ -365,7 +363,7 @@ export async function removePluginEnabledFromFileConfig(
 
   const nextEnabled = { ...enabledPlugins };
   for (const id of aliases) delete nextEnabled[id];
-  await atomicWriteJson(resolvedPath, {
+  await atomicWriteJsonConfig(resolvedPath, {
     ...parsed,
     plugins: {
       ...plugins,
@@ -392,7 +390,7 @@ export async function addSuppressedBuiltinInFileConfig(
 ): Promise<SuppressedBuiltinPatchResult> {
   const resolvedPath = resolvePath(filePath);
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
+  const plugins = isConfigRecord(parsed.plugins) ? parsed.plugins : {};
   const canonicalPluginId = canonicalizePluginId(pluginId);
   const aliases = pluginIdAliases(canonicalPluginId);
   const current = Array.isArray(plugins.suppressedBuiltins)
@@ -406,7 +404,7 @@ export async function addSuppressedBuiltinInFileConfig(
     ...parsed,
     plugins: { ...plugins, suppressedBuiltins: [...retained, canonicalPluginId] },
   };
-  await atomicWriteJson(resolvedPath, next);
+  await atomicWriteJsonConfig(resolvedPath, next);
   return { path: resolvedPath, pluginId, suppressed: true };
 }
 
@@ -420,7 +418,7 @@ export async function removeSuppressedBuiltinInFileConfig(
 ): Promise<SuppressedBuiltinPatchResult> {
   const resolvedPath = resolvePath(filePath);
   const parsed = await readJsonConfigFileOrEmpty(resolvedPath);
-  const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
+  const plugins = isConfigRecord(parsed.plugins) ? parsed.plugins : {};
   const aliases = pluginIdAliases(pluginId);
   const current = Array.isArray(plugins.suppressedBuiltins)
     ? (plugins.suppressedBuiltins as unknown[]).filter((v): v is string => typeof v === "string")
@@ -433,7 +431,7 @@ export async function removeSuppressedBuiltinInFileConfig(
     ...parsed,
     plugins: { ...plugins, suppressedBuiltins: nextSuppressedBuiltins },
   };
-  await atomicWriteJson(resolvedPath, next);
+  await atomicWriteJsonConfig(resolvedPath, next);
   return { path: resolvedPath, pluginId, suppressed: false };
 }
 
@@ -449,176 +447,4 @@ export function getDefaultConfigPath(): string {
  */
 export function hasDefaultConfigFile(): boolean {
   return existsSync(getDefaultConfigPath());
-}
-
-async function readJsonConfigFile(filePath: string): Promise<Record<string, unknown>> {
-  let content: string;
-  try {
-    content = await readFile(filePath, "utf-8");
-  } catch (error) {
-    throw new Error(`Unable to read config file: ${filePath}`, { cause: error });
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch (error) {
-    throw new Error(`Unable to parse config file as JSON: ${filePath}`, { cause: error });
-  }
-
-  if (!isRecord(parsed)) {
-    throw new Error(`Config file must contain a JSON object: ${filePath}`);
-  }
-
-  return parsed;
-}
-
-async function readJsonConfigFileOrEmpty(filePath: string): Promise<Record<string, unknown>> {
-  try {
-    return await readJsonConfigFile(filePath);
-  } catch (error) {
-    const cause = error instanceof Error ? error.cause : undefined;
-    if (isNodeError(cause) && cause.code === "ENOENT") {
-      return {};
-    }
-    throw error;
-  }
-}
-
-function patchUiLocale(parsed: Record<string, unknown>, locale: UiLocale): Record<string, unknown> {
-  const currentUi = isRecord(parsed.ui) ? parsed.ui : {};
-
-  return {
-    ...parsed,
-    ui: {
-      ...currentUi,
-      locale,
-    },
-  };
-}
-
-function patchPluginEnabled(
-  parsed: Record<string, unknown>,
-  pluginId: string,
-  enabled: boolean,
-): Record<string, unknown> {
-  const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
-  const enabledPlugins = isRecord(plugins.enabledPlugins) ? plugins.enabledPlugins : {};
-  const canonicalPluginId = canonicalizePluginId(pluginId);
-  const nextEnabledPlugins = { ...enabledPlugins };
-  for (const id of pluginIdAliases(canonicalPluginId)) delete nextEnabledPlugins[id];
-
-  return {
-    ...parsed,
-    plugins: {
-      ...plugins,
-      enabledPlugins: {
-        ...nextEnabledPlugins,
-        [canonicalPluginId]: enabled,
-      },
-    },
-  };
-}
-
-function patchPluginOptions(
-  parsed: Record<string, unknown>,
-  pluginId: string,
-  options: Record<string, string | number | boolean>,
-  clearOptionKeys: string[],
-): Record<string, unknown> {
-  const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
-  const currentOptions = isRecord(plugins.options) ? plugins.options : {};
-  const canonicalPluginId = canonicalizePluginId(pluginId);
-  const aliases = pluginIdAliases(canonicalPluginId);
-  const legacyPluginId = aliases.length > 1 ? aliases[1] : undefined;
-  const currentPluginOptions = isRecord(currentOptions[canonicalPluginId])
-    ? currentOptions[canonicalPluginId]
-    : legacyPluginId && isRecord(currentOptions[legacyPluginId])
-      ? currentOptions[legacyPluginId]
-      : {};
-  const nextOptions = { ...currentOptions };
-  for (const id of aliases) delete nextOptions[id];
-  const clearedOptionKeySet = new Set(clearOptionKeys);
-  const retainedPluginOptions = Object.fromEntries(
-    Object.entries(currentPluginOptions).filter(([key]) => !clearedOptionKeySet.has(key)),
-  );
-
-  return {
-    ...parsed,
-    plugins: {
-      ...plugins,
-      options: {
-        ...nextOptions,
-        // 敏感字段按脱敏合同不会回传 UI，二次保存普通字段时请求中自然缺少
-        // 已存 secret。这里按 option key 合并，避免整对象替换把同 scope 的密钥静默清空。
-        // 显式清除走 clearOptionKeys，先删除指定键，再合并本次输入；不会连带删除启用状态
-        // 或同插件的其他配置。
-        [canonicalPluginId]: {
-          ...retainedPluginOptions,
-          ...options,
-        },
-      },
-    },
-  };
-}
-
-function patchPluginRemoved(
-  parsed: Record<string, unknown>,
-  pluginId: string,
-): { next: Record<string, unknown>; removedEnabled: boolean; removedOptions: boolean } {
-  const plugins = isRecord(parsed.plugins) ? parsed.plugins : {};
-  const enabledPlugins = isRecord(plugins.enabledPlugins) ? plugins.enabledPlugins : {};
-  const options = isRecord(plugins.options) ? plugins.options : {};
-  const aliases = pluginIdAliases(pluginId);
-  const removedEnabled = aliases.some((id) => id in enabledPlugins);
-  const removedOptions = aliases.some((id) => id in options);
-  if (!removedEnabled && !removedOptions) {
-    return { next: parsed, removedEnabled, removedOptions };
-  }
-
-  const nextEnabled = { ...enabledPlugins };
-  for (const id of aliases) delete nextEnabled[id];
-  const nextOptions = { ...options };
-  for (const id of aliases) delete nextOptions[id];
-
-  return {
-    next: {
-      ...parsed,
-      plugins: {
-        ...plugins,
-        enabledPlugins: nextEnabled,
-        options: nextOptions,
-      },
-    },
-    removedEnabled,
-    removedOptions,
-  };
-}
-
-async function atomicWriteJson(filePath: string, value: Record<string, unknown>): Promise<void> {
-  const directory = dirname(filePath);
-  await mkdir(directory, { recursive: true });
-  const tempPath = join(
-    directory,
-    `.${basename(filePath)}.${process.pid}.${Date.now()}.${Math.random()
-      .toString(16)
-      .slice(2)}.tmp`,
-  );
-  const content = `${JSON.stringify(value, null, 2)}\n`;
-
-  try {
-    await writeFile(tempPath, content, { mode: 0o600 });
-    await rename(tempPath, filePath);
-  } catch (error) {
-    await unlink(tempPath).catch(() => undefined);
-    throw new Error(`Unable to write config file: ${filePath}`, { cause: error });
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isNodeError(value: unknown): value is NodeJS.ErrnoException {
-  return value instanceof Error && "code" in value;
 }

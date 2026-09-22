@@ -1,72 +1,40 @@
 import type { BackgroundBashOutputResult } from "@zcode/shared";
-import type { RuntimeInputPresentation } from "@zcode/contracts";
+import type { RuntimeMessageEntry } from "../agent/message-history.js";
 import type {
-  CompactPhase,
-  CompactReason,
-  CompactTimelineStatus,
-  CompactTrigger,
   BackgroundExecutionSnapshot,
   BackgroundTaskCancelResult,
   BackgroundTaskInfo,
   BackgroundTaskInfoStatus,
+  CheckpointCreatedPayload,
   CompactBoundaryPayload,
+  CompactPhase,
+  CompactReason,
   CompactTimelinePayload,
+  CompactTimelineStatus,
+  CompactTrigger,
   MessageId,
   MessageWithParts,
-  MessagePart,
-  MessageVisibility,
   Model,
-  ModelSelection,
   ModelNetworkStatusEvent,
   ModelStatusSink,
   ModelStreamRecoveryStatus,
-  PartId,
   PermissionBrokerRequest,
+  RewindScope,
+  RewindTargetEvaluation,
   SessionEvent,
   SessionEventType,
   SessionId,
   SessionProjection,
-  SessionStorePort,
-  SyntheticUserMessageSource,
-  TimelinePartDraft,
+  ToolCall,
   ToolCallId,
+  ToolExecutionResult,
+  ToolSchedule,
   TraceContext,
   TurnId,
-  TurnExecutionKind,
-  TurnInputIntentMetadata,
-  CheckpointCreatedPayload,
-  RewindScope,
-  RewindTargetEvaluation,
-  WorkspaceCheckpointArtifact,
-  ToolCall,
   TurnState,
-  ToolSchedule,
-  ToolExecutionResult,
+  WorkspaceCheckpointArtifact,
 } from "./deps.js";
-import type {
-  ActiveTurnStartReservation,
-  CompactTimelineContext,
-  ConversationBeforeInputForkOptions,
-  ConversationRewindResult,
-  ExecuteToolsOptions,
-  ExecuteToolsResult,
-  ExecuteTurnOptions,
-  PromptAdmissionOptions,
-  PromptAdmissionReceipt,
-  ParsedRewindCommand,
-  PermissionDecisionResult,
-  ResolvedTurnAttachment,
-  SelectionSideChatCreateOptions,
-  StableConversationForkOptions,
-  TurnResult,
-  WorkspaceCheckpointSummary,
-  WorkspaceFileRewindApplyResult,
-  WorkspaceFileRewindPreview,
-  WorkspaceForkResult,
-  WorkspaceRewindRestoredFile,
-  WorkspaceRewindResult,
-} from "./types.js";
-import type { RuntimeMessageEntry } from "../agent/message-history.js";
+import type { AgentRuntimeTurnPersistenceMethods } from "./internal-turn-persistence-methods.js";
 import type {
   RuntimeBackgroundStopOptions,
   RuntimeBackgroundStopResult,
@@ -78,8 +46,30 @@ import type {
   ReactiveCompactLoopContext,
   TurnRequestState,
 } from "./methods/turn-loop-state.js";
+import type {
+  ActiveTurnStartReservation,
+  CompactTimelineContext,
+  ConversationBeforeInputForkOptions,
+  ConversationRewindResult,
+  ExecuteToolsOptions,
+  ExecuteToolsResult,
+  ExecuteTurnOptions,
+  ParsedRewindCommand,
+  PermissionDecisionResult,
+  PromptAdmissionOptions,
+  PromptAdmissionReceipt,
+  SelectionSideChatCreateOptions,
+  StableConversationForkOptions,
+  TurnResult,
+  WorkspaceCheckpointSummary,
+  WorkspaceFileRewindApplyResult,
+  WorkspaceFileRewindPreview,
+  WorkspaceForkResult,
+  WorkspaceRewindRestoredFile,
+  WorkspaceRewindResult,
+} from "./types.js";
 
-export interface AgentRuntimeTurnMethods {
+export interface AgentRuntimeTurnMethods extends AgentRuntimeTurnPersistenceMethods {
   admitPrompt(
     input: string,
     attachments?: TurnState["attachments"],
@@ -365,78 +355,4 @@ export interface AgentRuntimeTurnMethods {
       postCompactReminderEntries?: readonly RuntimeMessageEntry[];
     },
   ): Promise<void>;
-  persistUserPrompt(
-    messageID: MessageId,
-    input: string,
-    attachments: ResolvedTurnAttachment[] | undefined,
-    traceContext: TraceContext,
-    options?: {
-      steerDelivery?: "guide" | "queue";
-      inputPresentation?: RuntimeInputPresentation;
-      sessionInputId?: string;
-      sourceCommandId?: string;
-      clientId?: string;
-      intent?: TurnInputIntentMetadata;
-      executionKind?: TurnExecutionKind;
-      epilogueStart?: number;
-    },
-  ): Promise<void>;
-  recordPendingModelChange(input: {
-    fromModel?: ModelSelection;
-    fromModelLabel?: string;
-    toModel: ModelSelection;
-    toModelLabel: string;
-  }): void;
-  persistPendingModelChangeTimeline(traceContext: TraceContext): Promise<void>;
-  persistSyntheticUserNotice(
-    messageID: MessageId,
-    text: string,
-    traceContext: TraceContext,
-  ): Promise<void>;
-  persistSyntheticUserNoticeForSession(options: {
-    messageID: MessageId;
-    sessionId: SessionId;
-    source: SyntheticUserMessageSource;
-    text: string;
-    traceContext: TraceContext;
-    metadata?: Record<string, unknown>;
-    visibility?: MessageVisibility;
-  }): Promise<void>;
-  persistAssistantTimelinePartForSession(options: {
-    sessionId: SessionId;
-    messageID?: MessageId;
-    partID?: PartId;
-    parentID?: MessageId;
-    created?: number;
-    completed?: number;
-    finish?: string;
-    timeline: TimelinePartDraft;
-    traceContext: TraceContext;
-  }): Promise<{ messageID: MessageId; partID: PartId }>;
-  persistAssistantMessage(
-    messageID: MessageId,
-    parentID: MessageId,
-    created: number,
-    update:
-      | {
-          completed?: number;
-          error?: { name: string; data?: Record<string, unknown> };
-          finish?: string;
-          tokens?: unknown;
-        }
-      | undefined,
-    traceContext: TraceContext,
-    model?: Model,
-  ): Promise<void>;
-  persistMessage(
-    input: Parameters<SessionStorePort["saveMessage"]>[0],
-    traceContext: TraceContext,
-    copyFrom?: Parameters<SessionStorePort["saveMessage"]>[1],
-  ): Promise<void>;
-  persistPart(
-    input: MessagePart,
-    traceContext: TraceContext,
-    copyFrom?: Parameters<SessionStorePort["savePart"]>[1],
-  ): Promise<void>;
-  rebuildProjection(): Promise<SessionProjection>;
 }

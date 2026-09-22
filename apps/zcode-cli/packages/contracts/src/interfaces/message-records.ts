@@ -1,0 +1,243 @@
+import type { MessageId, PartId, SessionId } from "./shared.js";
+
+import type {
+  CompactBoundaryPayload,
+  CompactPhase,
+  CompactReason,
+  CompactTimelineDisplay,
+  CompactTimelineStatus,
+  CompactTrigger,
+} from "../compact/index.js";
+
+import type { ModelId, ModelProviderId, ModelSelection } from "../model/index.js";
+
+import type { EnvInfo } from "./context-source.port.js";
+
+import {
+  type FileDiff,
+  type MessageProjectionAnchor,
+  type MessageSemantics,
+  type MessageVisibility,
+  type SyntheticUserMessageSource,
+} from "./session-records.js";
+
+export type OutputFormat =
+  | { type: "text" }
+  | { type: "json_schema"; schema: Record<string, unknown>; retryCount?: number };
+
+export interface MessageSummary {
+  title?: string;
+  body?: string;
+  diffs: FileDiff[];
+}
+
+export interface MessageContextSnapshot {
+  envInfo?: EnvInfo;
+}
+
+export interface UserMessageInfo {
+  id: MessageId;
+  sessionID: SessionId;
+  role: "user";
+  time: {
+    created: number;
+  };
+  format?: OutputFormat;
+  summary?: MessageSummary;
+  agent: string;
+  /** 未绑定会话的合成消息、缺少模型信息的旧消息不伪造请求来源。 */
+  modelSelection?: ModelSelection;
+  system?: string;
+  tools?: Record<string, boolean>;
+  contextSnapshot?: MessageContextSnapshot;
+  synthetic?: boolean;
+  source?: SyntheticUserMessageSource;
+  visibility?: MessageVisibility;
+  semantics?: MessageSemantics;
+  anchor?: MessageProjectionAnchor;
+  metadata?: Record<string, unknown>;
+}
+
+export interface AssistantErrorInfo {
+  name: string;
+  data?: Record<string, unknown>;
+}
+
+export interface TokenUsageInfo {
+  total?: number;
+  input: number;
+  output: number;
+  reasoning: number;
+  cache: {
+    read: number;
+    write: number;
+  };
+}
+
+export interface AssistantMessageInfo {
+  id: MessageId;
+  sessionID: SessionId;
+  role: "assistant";
+  time: {
+    created: number;
+    completed?: number;
+  };
+  error?: AssistantErrorInfo;
+  parentID: MessageId;
+  /** 真正模型输出应携带来源；历史恢复的合成时间线允许没有执行模型。 */
+  modelId?: ModelId;
+  providerId?: ModelProviderId;
+  mode: string;
+  /** 当前输出对应的 Plan 状态；旧记录缺失时按旧 mode 解释，不回填历史。 */
+  planEnabled?: boolean;
+  agent: string;
+  path: {
+    cwd: string;
+    root: string;
+  };
+  summary?: boolean;
+  cost: number;
+  tokens: TokenUsageInfo;
+  structured?: unknown;
+  reasoningLevel?: string;
+  finish?: string;
+  semantics?: MessageSemantics;
+  anchor?: MessageProjectionAnchor;
+  /** 附加领域语义（fork copy 的 forkOrigin provenance 等）。 */
+  metadata?: Record<string, unknown>;
+}
+
+export type MessageInfo = UserMessageInfo | AssistantMessageInfo;
+
+export interface TextPart {
+  id: PartId;
+  sessionID: SessionId;
+  messageID: MessageId;
+  type: "text";
+  text: string;
+  synthetic?: boolean;
+  ignored?: boolean;
+  time?: {
+    start: number;
+    end?: number;
+  };
+  metadata?: Record<string, unknown>;
+}
+
+export interface ReasoningPart {
+  id: PartId;
+  sessionID: SessionId;
+  messageID: MessageId;
+  type: "reasoning";
+  text: string;
+  metadata?: Record<string, unknown>;
+  time: {
+    start: number;
+    end?: number;
+  };
+}
+
+export type FilePartSource =
+  | {
+      type: "file";
+      path: string;
+      text: { value: string; start: number; end: number };
+    }
+  | {
+      type: "symbol";
+      path: string;
+      range: unknown;
+      name: string;
+      kind: number;
+      text: { value: string; start: number; end: number };
+    }
+  | {
+      type: "resource";
+      clientName: string;
+      uri: string;
+      text: { value: string; start: number; end: number };
+    };
+
+export interface AttachmentStorageMetadata {
+  sizeBytes?: number;
+  sha256?: string;
+  image?: {
+    maxDimension?: number;
+    originalWidth?: number;
+    originalHeight?: number;
+    width?: number;
+    height?: number;
+    resized?: boolean;
+    transformedSizeBytes?: number;
+  };
+  storageKind?: "inline" | "artifact" | "local_ref" | "remote_ref" | "metadata_only";
+  artifactUri?: string;
+  originalUrl?: string;
+  recoverability?: "provider_ready" | "rebuildable" | "preview_only" | "metadata_only" | "missing";
+  preview?: {
+    text?: string;
+    truncated?: boolean;
+    originalBytes?: number;
+    startLine?: number;
+    totalLines?: number;
+    truncatedByTokenCap?: boolean;
+    partialViewNotice?: string;
+  };
+  errorCode?: string;
+}
+
+export interface FilePart {
+  id: PartId;
+  sessionID: SessionId;
+  messageID: MessageId;
+  type: "file";
+  mime: string;
+  filename?: string;
+  url: string;
+  source?: FilePartSource;
+  metadata?: AttachmentStorageMetadata;
+}
+
+export interface AgentPart {
+  id: PartId;
+  sessionID: SessionId;
+  messageID: MessageId;
+  type: "agent";
+  name: string;
+  source?: {
+    value: string;
+    start: number;
+    end: number;
+  };
+}
+
+export interface CompactionPart {
+  id: PartId;
+  sessionID: SessionId;
+  messageID: MessageId;
+  type: "compaction";
+  auto: boolean;
+  trigger?: CompactTrigger;
+  phase?: CompactPhase;
+  compactReason?: CompactReason;
+  overflow?: boolean;
+  tail_start_id?: MessageId;
+  compactBoundary?: CompactBoundaryPayload;
+  operationId?: string;
+  timelineStatus?: CompactTimelineStatus;
+  timelineDisplay?: CompactTimelineDisplay;
+  timelineText?: string;
+  replace?: boolean;
+  reason?: string;
+  boundaryId?: string;
+  summaryMessageId?: MessageId;
+  preCompactTokenCount?: number;
+  postCompactTokenCount?: number;
+  truePostCompactTokenCount?: number;
+  attempt?: number;
+  maxAttempts?: number;
+  time?: {
+    start?: number;
+    end?: number;
+  };
+}

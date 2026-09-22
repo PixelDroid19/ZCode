@@ -1,0 +1,321 @@
+import type {
+  CacheReport,
+  ContextSectionSource,
+  ContextSnapshotView,
+  NetworkRequestRecord,
+  TokenConfidence,
+  TokenMethod,
+  TraceSpan,
+} from "./shared";
+
+import { type DebugView, type EnvShell, type SourceInputs } from "./debug-view-model.js";
+
+export function groupSections(snapshot?: ContextSnapshotView) {
+  const groups = new Map<ContextSectionSource, number>();
+  for (const section of snapshot?.sections ?? []) {
+    groups.set(section.source, (groups.get(section.source) ?? 0) + section.tokens);
+  }
+  const total = [...groups.values()].reduce((sum, value) => sum + value, 0);
+  return [...groups.entries()].map(([source, tokens]) => ({
+    source,
+    tokens,
+    percent: total > 0 ? tokens / total : 0,
+  }));
+}
+
+export function buildQuery(inputs: SourceInputs): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(inputs)) {
+    if (value.trim()) params.set(key, value.trim());
+  }
+  const query = params.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function fetchJson<T>(url: string): Promise<T> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`${response.status} ${response.statusText}`);
+  }
+  return (await response.json()) as T;
+}
+
+export function stringifyPayload(payload: unknown): string {
+  if (typeof payload === "string") return payload;
+  try {
+    return JSON.stringify(payload, null, 2) ?? String(payload);
+  } catch {
+    return String(payload);
+  }
+}
+
+export function parseMessageEvent<T>(event: Event): T | null {
+  const data = (event as MessageEvent<string>).data;
+  if (typeof data !== "string") return null;
+  try {
+    return JSON.parse(data) as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function copyTextToClipboard(text: string): Promise<void> {
+  if (navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  document.body.append(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
+export function formatEnvCommand(env: Record<string, string>, shell: EnvShell): string {
+  const entries = Object.entries(env);
+  if (entries.length === 0) return "";
+  if (shell === "powershell") {
+    return entries.map(([name, value]) => `$env:${name} = ${quotePowerShell(value)}`).join("\n");
+  }
+  if (shell === "cmd") {
+    return entries
+      .map(([name, value]) => `set "${name}=${value.replaceAll('"', '\\"')}"`)
+      .join("\n");
+  }
+  return entries.map(([name, value]) => `export ${name}=${quotePosix(value)}`).join("\n");
+}
+
+function quotePosix(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function quotePowerShell(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+export function mergeNetworkRequest(
+  current: NetworkRequestRecord[],
+  next: NetworkRequestRecord,
+): NetworkRequestRecord[] {
+  const byId = new Map(current.map((request) => [request.id, request]));
+  byId.set(next.id, next);
+  return [...byId.values()]
+    .toSorted((left, right) => compareDateDesc(left.startedAt, right.startedAt))
+    .slice(0, 200);
+}
+
+export function mergeNetworkSpans(
+  spans: TraceSpan[],
+  requests: NetworkRequestRecord[],
+  traceId: string,
+): TraceSpan[] {
+  if (!traceId) return spans;
+  const networkSpans = requests
+    .filter((request) => request.traceId === traceId)
+    .map(networkRequestToSpan);
+  return [...spans, ...networkSpans];
+}
+
+function networkRequestToSpan(request: NetworkRequestRecord): TraceSpan {
+  return {
+    id: `network:${request.id}`,
+    traceId: request.traceId,
+    sessionId: request.sessionId,
+    turnId: request.turnId,
+    spanId: request.spanId,
+    lane: "network",
+    label: `${request.method} ${request.host}`,
+    source: "network",
+    startAt: request.startedAt,
+    endAt: request.completedAt,
+    status: request.status === "pending" ? "running" : request.status === "error" ? "error" : "ok",
+    summary: `${request.method} ${request.url}\n${formatNetworkStatus(request)} · ${formatBytes(
+      request.requestBodyBytes,
+    )} up · ${formatBytes(request.responseBodyBytes)} down`,
+    payload: request,
+  };
+}
+
+export function filterNetworkRequests(
+  requests: NetworkRequestRecord[],
+  filter: string,
+): NetworkRequestRecord[] {
+  const normalized = filter.trim().toLowerCase();
+  if (!normalized) return requests;
+  return requests.filter((request) =>
+    [
+      request.traceId,
+      request.sessionId,
+      request.turnId,
+      request.spanId,
+      request.method,
+      request.host,
+      request.path,
+      request.url,
+      request.status,
+      request.statusCode ? String(request.statusCode) : "",
+    ]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(normalized)),
+  );
+}
+
+export function networkRequestFromPayload(payload: unknown): NetworkRequestRecord | null {
+  if (!isPlainObject(payload)) return null;
+  if (typeof payload.id !== "string") return null;
+  if (typeof payload.startedAt !== "string") return null;
+  if (typeof payload.method !== "string") return null;
+  if (typeof payload.url !== "string") return null;
+  if (typeof payload.status !== "string") return null;
+  return payload as unknown as NetworkRequestRecord;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+export function viewFromHash(hash: string): DebugView {
+  const normalized = hash.replace(/^#/, "");
+  if (normalized === "gantt" || normalized === "network") return normalized;
+  return "gantt";
+}
+
+export function formatSpanStatus(value: TraceSpan["status"]): string {
+  switch (value) {
+    case "running":
+      return "进行中";
+    case "ok":
+      return "完成";
+    case "error":
+      return "错误";
+    case "cancelled":
+      return "已取消";
+    case "unknown":
+      return "未知";
+  }
+}
+
+export function formatSpanDuration(span: TraceSpan): string {
+  if (!span.endAt) return span.status === "running" ? "进行中" : "未结束";
+  const start = new Date(span.startAt).getTime();
+  const end = new Date(span.endAt).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return "未知耗时";
+  return formatDuration(end - start);
+}
+
+export function formatObservationLevel(value: ContextSnapshotView["observationLevel"]): string {
+  switch (value) {
+    case "full":
+      return "完整";
+    case "metadata":
+      return "元数据";
+    case "inferred":
+      return "推断";
+  }
+}
+
+export function formatTokenMethod(value?: TokenMethod): string {
+  switch (value) {
+    case "provider_count":
+      return "模型计数";
+    case "provider_usage":
+      return "模型用量";
+    case "proportional_estimate":
+      return "按比例估算";
+    case "estimated":
+      return "本地估算";
+    default:
+      return "未知来源";
+  }
+}
+
+export function formatConfidence(value?: TokenConfidence): string {
+  switch (value) {
+    case "high":
+      return "可信度高";
+    case "medium":
+      return "可信度中";
+    case "low":
+      return "可信度低";
+    default:
+      return "可信度未知";
+  }
+}
+
+export function formatCacheStatus(value: CacheReport["segments"][number]["status"]): string {
+  switch (value) {
+    case "hit":
+      return "命中";
+    case "miss":
+      return "未命中";
+    case "unknown":
+      return "未知";
+  }
+}
+
+export function formatSegmentLabel(value?: string): string {
+  switch (value) {
+    case "system_prompt":
+      return "系统";
+    case "skills":
+      return "技能";
+    case "tools":
+      return "工具";
+    case "other":
+      return "其他";
+    case "message":
+      return "消息";
+    case "system":
+      return "system 消息";
+    case "user":
+      return "user 消息";
+    case "assistant":
+      return "assistant 消息";
+    case "tool":
+      return "tool 消息";
+    default:
+      return value ?? "片段";
+  }
+}
+
+export function formatNetworkStatus(request: NetworkRequestRecord): string {
+  if (request.status === "pending") return "进行中";
+  if (request.status === "error") return "错误";
+  return request.statusCode ? String(request.statusCode) : "完成";
+}
+
+export function formatDuration(value?: number): string {
+  if (value === undefined) return "-- ms";
+  if (value < 1000) return `${value} ms`;
+  return `${(value / 1000).toFixed(1)} s`;
+}
+
+export function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+export function formatTime(value?: string): string {
+  if (!value) return "--:--:--";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function compareDateDesc(left?: string, right?: string): number {
+  return new Date(right ?? 0).getTime() - new Date(left ?? 0).getTime();
+}
+
+export function compareDateAsc(left?: string, right?: string): number {
+  return new Date(left ?? 0).getTime() - new Date(right ?? 0).getTime();
+}

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type {
   Logger,
   McpCallToolOptions,
@@ -12,6 +11,8 @@ import type {
   McpToolDescriptor,
 } from "@zcode/contracts";
 import type { McpTelemetryTracker } from "./telemetry.js";
+import { createMcpPoolConnectionKey } from "./pool-identity.js";
+import { createMcpConnectionContext, type McpConnectionContext } from "./pool-context.js";
 
 const DEFAULT_IDLE_GRACE_MS = 30_000;
 
@@ -22,12 +23,7 @@ interface CreateMcpAdapterForPoolInput {
   workingDirectory?: string;
 }
 
-export interface McpConnectionContext {
-  mcpConnectionId: string;
-  mcpIsolation: "session" | "workspace";
-  sessionId?: string;
-  workspaceKey?: string;
-}
+export type { McpConnectionContext } from "./pool-context.js";
 
 export interface McpConnectionPoolOptions {
   createAdapter(input: CreateMcpAdapterForPoolInput): McpPort;
@@ -202,7 +198,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
       config: McpServerConfig,
       connectOptions: McpConnectOptions = {},
     ): Promise<McpServerStatus> => {
-      const key = connectionKey({
+      const key = createMcpPoolConnectionKey({
         config,
         connectOptions,
         leaseId,
@@ -223,7 +219,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
       } else {
         // 过去 pool、adapter 和 stdio PID 的日志彼此没有稳定关联键，无法从一个
         // session 追到实际 MCP 子进程。连接上下文在 entry 创建时固定，后续 lease 共用同一 ID。
-        const connectionContext = createConnectionContext({
+        const connectionContext = createMcpConnectionContext({
           config,
           connectOptions,
           sessionId,
@@ -415,55 +411,4 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
       };
     },
   };
-}
-
-function createConnectionContext(input: {
-  config: McpServerConfig;
-  connectOptions: McpConnectOptions;
-  sessionId?: string;
-}): McpConnectionContext {
-  const mcpIsolation = input.config.isolation === "workspace" ? "workspace" : "session";
-  const workspaceKey = resolveWorkspaceKey(input.connectOptions);
-  return {
-    mcpConnectionId: randomUUID(),
-    mcpIsolation,
-    ...(workspaceKey ? { workspaceKey } : {}),
-    ...(mcpIsolation === "session" && input.sessionId ? { sessionId: input.sessionId } : {}),
-  };
-}
-
-function resolveWorkspaceKey(connectOptions: McpConnectOptions): string | undefined {
-  return (
-    connectOptions.workspaceIdentity?.trim() || connectOptions.workingDirectory?.trim() || undefined
-  );
-}
-
-function connectionKey(input: {
-  config: McpServerConfig;
-  connectOptions: McpConnectOptions;
-  leaseId: string;
-  serverName: string;
-}): string {
-  // 默认 session isolation；只有明确声明 workspace 的无状态 server 才允许跨 session 复用。
-  const scope =
-    input.config.isolation === "workspace"
-      ? (resolveWorkspaceKey(input.connectOptions) ?? "")
-      : input.leaseId;
-  return [
-    input.serverName,
-    scope,
-    input.connectOptions.capabilityRevision ?? "",
-    stableStringify(input.config),
-  ].join("\u0000");
-}
-
-function stableStringify(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
-  const record = value as Record<string, unknown>;
-  return `{${Object.keys(record)
-    .toSorted()
-    .filter((key) => record[key] !== undefined)
-    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
-    .join(",")}}`;
 }

@@ -14,11 +14,14 @@ import {
   type LocalhostOAuthCallbackServer,
 } from "../auth/localhost-callback.js";
 import type { SharedZCodeCredentialStore } from "../auth/shared-credentials.js";
+import { loadCanonicalCredentials, publishCanonicalCredentials } from "./oauth-credentials.js";
 import {
-  loadCanonicalCredentials,
-  publishCanonicalCredentials,
-  type CanonicalCredentialSnapshot,
-} from "./oauth-credentials.js";
+  hashOAuthIdentifier,
+  hasNewerOAuthCredentials,
+  normalizeOAuthCallbackPath,
+  oauthInteractiveLogContext,
+  waitForOAuthFollower,
+} from "./oauth-interactive-helpers.js";
 import {
   deletePendingAuthorizationIfOwned,
   loadPendingAuthorization,
@@ -92,7 +95,7 @@ export async function runMcpInteractiveAuthorization(
   try {
     // 锁内重读：等待 lease 期间别人可能已经完成授权。
     const current = await loadCanonicalCredentials(input.credentialStore, input.keyPrefix);
-    if (hasNewerCredentials(current, baselineGeneration)) {
+    if (hasNewerOAuthCredentials(current, baselineGeneration)) {
       return { status: "already-authorized" };
     }
     return await leadAuthorization(input, {
@@ -119,7 +122,7 @@ async function leadAuthorization(
   },
 ): Promise<McpInteractiveAuthorizationOutcome> {
   const state = randomBytes(24).toString("base64url");
-  const callbackPath = normalizeCallbackPath(input.config.redirectPath, input.serverName);
+  const callbackPath = normalizeOAuthCallbackPath(input.config.redirectPath, input.serverName);
   // 每次授权都重新 listen(0)。彻底放弃端口复用：listener 在整个连接期长期存活，复用必撞；
   // fresh DCR 会把当前存活 listener 的 URL 写进 redirect_uris，端口变化不再导致失配。
   let callbackServer: LocalhostOAuthCallbackServer;
@@ -129,7 +132,7 @@ async function leadAuthorization(
     // EACCES/EMFILE/ENFILE/EADDRNOTAVAIL 等一律按 leader 失败处理，不特殊处理 EADDRINUSE。
     input.logger?.warn("MCP OAuth callback listener failed", {
       event: "mcp.oauth.callback_listener.failed",
-      ...logContext(input, state),
+      ...oauthInteractiveLogContext(input, state),
       error: error instanceof Error ? error.message : String(error),
       status: "failed",
     });
@@ -186,7 +189,7 @@ async function leadAuthorization(
     });
     input.logger?.info("MCP OAuth authorization completed", {
       event: "mcp.oauth.authorization.completed",
-      ...logContext(input, state),
+      ...oauthInteractiveLogContext(input, state),
       status: "completed",
     });
     return { status: "authorized" };
@@ -194,12 +197,12 @@ async function leadAuthorization(
     // 事务 TTL 到点时授权仍可能在浏览器里进行，但本 leader 已经放弃：把 listener 关掉，
     // 让下一次连接重新成为 leader，而不是留下一个不会被消费的回调端口。
     const published = await loadCanonicalCredentials(input.credentialStore, input.keyPrefix);
-    if (hasNewerCredentials(published, context.baselineGeneration)) {
+    if (hasNewerOAuthCredentials(published, context.baselineGeneration)) {
       return { status: "already-authorized" };
     }
     input.logger?.warn("MCP OAuth authorization failed", {
       event: "mcp.oauth.authorization.failed",
-      ...logContext(input, state),
+      ...oauthInteractiveLogContext(input, state),
       error: error instanceof Error ? error.message : String(error),
       status: "failed",
     });
@@ -218,13 +221,14 @@ async function followAuthorization(
   let projectedUrl: string | undefined;
   input.logger?.info("MCP OAuth authorization is already in progress elsewhere", {
     event: "mcp.oauth.authorization.following",
-    ...logContext(input),
+    ...oauthInteractiveLogContext(input),
     status: "waiting",
   });
 
   while (Date.now() < deadline && !input.signal?.aborted) {
     const current = await loadCanonicalCredentials(input.credentialStore, input.keyPrefix);
-    if (hasNewerCredentials(current, baselineGeneration)) return { status: "already-authorized" };
+    if (hasNewerOAuthCredentials(current, baselineGeneration))
+      return { status: "already-authorized" };
 
     const pending = await loadPendingAuthorization(input.credentialStore, input.keyPrefix);
     if (pending && pending.authorizationUrl !== projectedUrl) {
@@ -237,7 +241,7 @@ async function followAuthorization(
         serverName: input.serverName,
       });
     }
-    await sleep(FOLLOWER_POLL_INTERVAL_MS, input.signal);
+    await waitForOAuthFollower(FOLLOWER_POLL_INTERVAL_MS, input.signal);
   }
 
   return { status: "pending", ...(projectedUrl ? { authorizationUrl: projectedUrl } : {}) };
@@ -371,7 +375,7 @@ class InteractiveAuthorizationProvider implements OAuthClientProvider {
     this.logger?.info("MCP OAuth credentials published", {
       event: "mcp.oauth.credentials.published",
       ...this.logContext(),
-      clientIdHash: hashIdentifier(clientInformation.client_id),
+      clientIdHash: hashOAuthIdentifier(clientInformation.client_id),
       grantKind: "authorization_code",
       hasRefreshToken: Boolean(tokens.refresh_token),
       publishedGeneration: published.generation.slice(0, 12),
@@ -447,51 +451,4 @@ class InteractiveAuthorizationProvider implements OAuthClientProvider {
       processId: process.pid,
     };
   }
-}
-
-function hasNewerCredentials(
-  current: CanonicalCredentialSnapshot | undefined,
-  baselineGeneration: string | undefined,
-): boolean {
-  return Boolean(current?.tokens && current.generation !== baselineGeneration);
-}
-
-function normalizeCallbackPath(value: string | undefined, serverName: string): string {
-  const fallback = `/oauth/callback/mcp/${encodeURIComponent(serverName)}`;
-  if (!value) return fallback;
-  return value.startsWith("/") ? value : `/${value}`;
-}
-
-function logContext(
-  input: McpInteractiveAuthorizationInput,
-  state?: string,
-): Record<string, unknown> {
-  return {
-    adapterInstanceId: input.adapterInstanceId,
-    credentialKeyPrefix: input.keyPrefix,
-    mcpServerName: input.serverName,
-    ...(state
-      ? { oauthStateId: createHash("sha256").update(state).digest("hex").slice(0, 16) }
-      : {}),
-    processId: process.pid,
-  };
-}
-
-function hashIdentifier(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  return createHash("sha256").update(value).digest("hex").slice(0, 12);
-}
-
-function sleep(durationMs: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      signal?.removeEventListener("abort", onAbort);
-      resolve();
-    }, durationMs);
-    const onAbort = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
 }

@@ -17,6 +17,14 @@ import type {
   OfficialMcpAuthHeadersPort,
   OfficialMcpTrustedOriginRegistry,
 } from "@zcode/contracts";
+import {
+  isOfficialMcpRedirect,
+  numericHttpHeader,
+  officialMcpBodyByteLength,
+  readOfficialMcpServerRequestId,
+  safeOfficialMcpPath,
+  withOfficialMcpServerRequestId,
+} from "./official-auth-response.js";
 
 /** 由 adapter 抛出的、带稳定分类的官方鉴权错误。禁止调用方按 message 文本分流。 */
 export class OfficialMcpAuthError extends Error {
@@ -143,8 +151,8 @@ export function createOfficialMcpAuthFetch(
       mcpKey: input.official.mcpKey,
       mcpServerName: input.serverName,
       module: "adapters.mcp.official_auth",
-      requestBodyBytes: byteLength(init?.body),
-      urlPath: safePath(requestUrl),
+      requestBodyBytes: officialMcpBodyByteLength(init?.body),
+      urlPath: safeOfficialMcpPath(requestUrl),
       ...(rpc.method ? { rpcMethod: rpc.method } : {}),
       ...(rpc.id !== undefined ? { rpcId: rpc.id } : {}),
       ...(rpc.toolName ? { rpcToolName: rpc.toolName } : {}),
@@ -228,7 +236,7 @@ export function createOfficialMcpAuthFetch(
         });
         // 服务端自行生成的 request id，从响应头读回。这是**唯一**能把客户端日志与
         // 服务端日志对上的键：客户端不发送该头，服务端也不采纳入站值。
-        const serverRequestId = readServerRequestId(response);
+        const serverRequestId = readOfficialMcpServerRequestId(response);
         // Settings 只消费连接、initialize 与 tools/list 诊断。tools/call 可能返回大媒体，
         // 其 request id 已按 span 投影到 tool result，禁止为了设置页再 clone/读取响应体。
         const failureKind =
@@ -250,7 +258,7 @@ export function createOfficialMcpAuthFetch(
           ...logBase,
           attempt,
           httpStatus: response.status,
-          responseBodyBytes: numericHeader(response.headers.get("content-length")),
+          responseBodyBytes: numericHttpHeader(response.headers.get("content-length")),
           sendDurationMs: Date.now() - sendStartedAt,
           ...(serverRequestId ? { serverRequestId } : {}),
         };
@@ -310,7 +318,9 @@ export function createOfficialMcpAuthFetch(
     if (response.status === 401) {
       const baseMessage = "official MCP rejected the current credential";
       const message =
-        rpc.method === "tools/call" ? withServerRequestId(baseMessage, response) : baseMessage;
+        rpc.method === "tools/call"
+          ? withOfficialMcpServerRequestId(baseMessage, response)
+          : baseMessage;
       await discardBody(response);
       throw failWith("official_auth_rejected", message);
     }
@@ -318,14 +328,18 @@ export function createOfficialMcpAuthFetch(
       // 身份有效但权限/套餐不足，重取同一份凭证不会改变结果。
       const baseMessage = "official MCP denied access for the current plan";
       const message =
-        rpc.method === "tools/call" ? withServerRequestId(baseMessage, response) : baseMessage;
+        rpc.method === "tools/call"
+          ? withOfficialMcpServerRequestId(baseMessage, response)
+          : baseMessage;
       await discardBody(response);
       throw failWith("official_auth_forbidden", message);
     }
-    if (isRedirect(response.status)) {
+    if (isOfficialMcpRedirect(response.status)) {
       const baseMessage = `official MCP responded with a blocked redirect (${response.status})`;
       const message =
-        rpc.method === "tools/call" ? withServerRequestId(baseMessage, response) : baseMessage;
+        rpc.method === "tools/call"
+          ? withOfficialMcpServerRequestId(baseMessage, response)
+          : baseMessage;
       await discardBody(response);
       throw failWith("official_auth_redirect_blocked", message);
     }
@@ -376,7 +390,7 @@ async function readBoundedResponseText(
   response: Response,
   maxBytes: number,
 ): Promise<string | undefined> {
-  const declaredLength = numericHeader(response.headers.get("content-length"));
+  const declaredLength = numericHttpHeader(response.headers.get("content-length"));
   if (declaredLength !== undefined && declaredLength > maxBytes) return undefined;
   const body = response.clone().body;
   if (!body) return undefined;
@@ -450,48 +464,6 @@ function safeOrigin(value: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function isRedirect(status: number): boolean {
-  return status >= 300 && status < 400;
-}
-
-/** 服务端在响应头里回带的 request id。缺失时返回 undefined。 */
-function readServerRequestId(response: Response): string | undefined {
-  const value = response.headers.get(REQUEST_ID_HEADER)?.trim();
-  return value ? value : undefined;
-}
-
-/**
- * 把服务端 request id 附到分类错误的 message 上。
- *
- * tool call 分类错误直接向上展示，使用紧凑的 `message - requestId` 形态。连接期 request id
- * 由 adapter 的结构化 status diagnostic 统一拼接，避免 SDK 包装前后重复。
- */
-function withServerRequestId(message: string, response: Response): string {
-  const requestId = readServerRequestId(response);
-  return requestId ? `${message} - ${requestId}` : message;
-}
-
-/** 请求路径（不含 query）。query 可能带用户内容，因此丢弃。 */
-function safePath(value: string): string {
-  try {
-    return new URL(value).pathname;
-  } catch {
-    return "(unparsable)";
-  }
-}
-
-function byteLength(body: unknown): number | undefined {
-  if (typeof body === "string") return Buffer.byteLength(body, "utf8");
-  if (body instanceof Uint8Array) return body.byteLength;
-  return undefined;
-}
-
-function numericHeader(value: string | null): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 /**

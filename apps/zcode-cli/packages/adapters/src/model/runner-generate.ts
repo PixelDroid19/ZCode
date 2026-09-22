@@ -1,18 +1,12 @@
-import type { Logger, ModelStatusSink, ModelTextResult } from "@zcode/contracts";
+import type { ModelTextResult } from "@zcode/contracts";
 import {
   ModelErrorCode,
   ModelProtocolError,
-  ModelRetryReason,
   ModelTransportKind as ModelTransportKindValue,
 } from "@zcode/contracts";
-import { classifyModelFailure, inspectProviderFailure } from "./failure-classifier.js";
-import type { ClassifiedModelFailure } from "./failure-classifier.js";
-import { getResponseHeaders, unwrapRetryError } from "./failure-inspection.js";
-import { offPeakTicketExpiredMessage, resolveOffPeakFailureDecision } from "./offpeak-retry.js";
 import { AiSdkModelAdapterError } from "./errors.js";
 import { resolveAnthropicRequestMetadataUserId } from "./anthropic-request-metadata.js";
 import { createGenerateTextOptions } from "./runner-options.js";
-import { detectProviderBusinessFinishError } from "./provider-finish-business-error.js";
 import {
   normalizeReasoning,
   normalizeSources,
@@ -20,60 +14,34 @@ import {
   normalizeToolResults,
   normalizeUsage,
 } from "./runner-normalization.js";
-import {
-  isDevelopmentModelIOEnv,
-  recordGenerateTextDebug,
-  shouldRecordModelIO,
-} from "./runner-debug.js";
-import {
-  getGenerateTextResultMetadata,
-  isZeroOutputModelCompletion,
-  logGenerateTextDiagnostics,
-} from "./runner-diagnostics.js";
+import { isDevelopmentModelIOEnv, shouldRecordModelIO } from "./runner-debug.js";
+import { getGenerateTextResultMetadata, logGenerateTextDiagnostics } from "./runner-diagnostics.js";
 import { sanitizeModelNetworkHeaders } from "./runner-network-headers.js";
-import { canRetryEmptyCompletion, scheduleEmptyCompletionRetry } from "./empty-completion-retry.js";
-import {
-  calculateRetryDelay,
-  logRetryDelayDecision,
-  sleep,
-  toAdapterError,
-} from "./runner-retry.js";
+import { scheduleEmptyCompletionRetry } from "./empty-completion-retry.js";
 import {
   admissionWaitPublishers,
   createAttemptStatusContext,
   createStatusContext,
   publishModelStatus,
 } from "./runner-status.js";
-import type { EnvRecord } from "./model-execution.js";
-import type { ResolvedAiSdkModelRetryOptions } from "./retry-policy.js";
-import type {
-  AiSdkModelRuntime,
-  AiSdkModelTextRequest,
-  ResolvedAiSdkModel,
-} from "./runner-runtime.js";
-import { resolveModelForAttempt, RuntimeHeadersRefreshError } from "./runner-runtime-headers.js";
-import { retryAllowedByFailurePolicy } from "./workflow-model-failure-policy.js";
-import { modelFailureStatusFields, providerRequestIdFromHeaders } from "./runner-telemetry.js";
-import { repairReasoningHistoryAfterSignatureRejection } from "./reasoning-history-normalization.js";
+import { resolveModelForAttempt } from "./runner-runtime-headers.js";
 import { admitAttempt, type AttemptAdmission } from "./request-admission.js";
+import { retryAttemptLoopContinues, retryBudgetMaxAttempts } from "./retry-budget.js";
+import { handleGenerateTextFailure } from "./runner-generate-failure.js";
+import type { GenerateTextRunInput } from "./runner-generate-input.js";
 import {
-  retryAttemptLoopContinues,
-  retryBudgetAllows,
-  retryBudgetMaxAttempts,
-} from "./retry-budget.js";
+  serializeStructuredOutput,
+  shouldRetryEmptyGenerateCompletion,
+  throwIfProviderBusinessFinishError,
+  waitForGenerateTextOrAbort,
+} from "./runner-generate-result.js";
+import {
+  completeGenerateText,
+  generateStatusPublishOptions,
+  throwGenerateAdmissionFailure,
+} from "./runner-generate-status.js";
 
-export async function runGenerateText(input: {
-  debugDir?: string;
-  env: EnvRecord;
-  logger?: Logger;
-  request: AiSdkModelTextRequest;
-  resolveModel: () => ResolvedAiSdkModel;
-  resolved: ResolvedAiSdkModel;
-  retry: ResolvedAiSdkModelRetryOptions;
-  runtime: AiSdkModelRuntime;
-  statusSink?: ModelStatusSink;
-  modelIoFullRetentionEnabled: boolean;
-}): Promise<ModelTextResult> {
+export async function runGenerateText(input: GenerateTextRunInput): Promise<ModelTextResult> {
   // 重试预算档位：workflow actor 的请求带 unbounded，
   // 只放宽瞬态失败的放弃条件；状态事件里的 maxAttempts 以 0 表示无上限。
   const retryBudget = input.request.modelRetryBudget;
@@ -101,17 +69,14 @@ export async function runGenerateText(input: {
     );
     attempt += 1
   ) {
-    const retryBudgetAttempt =
-      attempt - Number(signatureRepairAttempted);
+    const retryBudgetAttempt = attempt - Number(signatureRepairAttempted);
     const attemptRequest = { ...input.request, messages: requestMessages };
     const startedAt = Date.now();
     let resolved = input.resolved;
     let statusContext = createAttemptStatusContext(
       {
         ...baseStatusContext,
-        maxAttempts: statusMaxAttempts(
-          Number(signatureRepairAttempted),
-        ),
+        maxAttempts: statusMaxAttempts(Number(signatureRepairAttempted)),
       },
       attempt,
     );
@@ -129,31 +94,16 @@ export async function runGenerateText(input: {
         admission: input.request.modelRequestAdmission,
         model: { providerId: String(resolved.providerId), modelId: String(resolved.modelId) },
         signal: input.request.abortSignal,
-        ...admissionWaitPublishers(statusContext, attempt, statusPublishOptions(input)),
+        ...admissionWaitPublishers(statusContext, attempt, generateStatusPublishOptions(input)),
       });
     } catch (admitError) {
-      const admitFailure = classifyModelFailure(admitError, input.request.abortSignal);
-      await publishModelStatus(
-        {
-          ...statusContext,
-          attempt,
-          message: admitFailure.message,
-          reason: admitFailure.reason,
-          requestHeaderCount,
-          requestHeaders,
-          retryable: false,
-          statusCode: admitFailure.statusCode,
-          ...modelFailureStatusFields(admitError, admitFailure, "connect"),
-          timestamp: new Date().toISOString(),
-          type: "model_request_failed",
-        },
-        {
-          ...statusPublishOptions(input),
-          failureError: unwrapRetryError(admitError),
-        },
-      );
-      throw toAdapterError(admitError, admitFailure, statusContext, attempt, {
-        errorPhase: "connect",
+      return await throwGenerateAdmissionFailure({
+        attempt,
+        error: admitError,
+        requestHeaderCount,
+        requestHeaders,
+        runner: input,
+        statusContext,
       });
     }
 
@@ -187,7 +137,7 @@ export async function runGenerateText(input: {
           timestamp: new Date(startedAt).toISOString(),
           type: "model_request_started",
         },
-        statusPublishOptions(input, admission),
+        generateStatusPublishOptions(input, admission),
       );
 
       // 部分非流式 provider/fetch 兼容层收到 AbortSignal 后不会及时 settle
@@ -201,20 +151,7 @@ export async function runGenerateText(input: {
       const responseHeaders = sanitizeModelNetworkHeaders(
         getGenerateTextResultMetadata(result)?.response?.headers,
       );
-      const providerBusinessFinishError = detectProviderBusinessFinishError({
-        providerId: String(resolved.providerId),
-        providerKind: resolved.providerKind,
-        source: {
-          finishReason: result.finishReason,
-          providerMetadata: result.providerMetadata,
-          rawFinishReason: (result.providerMetadata as Record<string, unknown> | undefined)
-            ?.rawFinishReason,
-          response: (result as unknown as { response?: unknown }).response,
-        },
-      });
-      if (providerBusinessFinishError) {
-        throw providerBusinessFinishError;
-      }
+      throwIfProviderBusinessFinishError({ result, resolved });
       const usage = normalizeUsage(result.totalUsage ?? result.usage);
       const toolCalls = normalizeToolCalls(result, input.logger);
       const toolResults = normalizeToolResults(result, toolCalls);
@@ -223,24 +160,17 @@ export async function runGenerateText(input: {
         ? serializeStructuredOutput(result)
         : result.text;
       const reasoning = normalizeReasoning(result.reasoning);
-      const reasoningLength = (reasoning ?? []).reduce(
-        (total, block) => total + block.text.length,
-        0,
-      );
       if (
-        input.request.preserveProviderStreamBoundaries !== true &&
-        isZeroOutputModelCompletion({
-          finishReason: result.finishReason,
-          reasoningLength,
-          textLength: text.length,
-          toolCallCount: toolCalls?.length ?? 0,
-          usage,
-        }) &&
-        canRetryEmptyCompletion({
-          abortSignal: input.request.abortSignal,
+        shouldRetryEmptyGenerateCompletion({
           attempt,
-          maxAttempts: input.retry.maxAttempts,
-          retryCount: emptyCompletionRetryCount,
+          emptyCompletionRetryCount,
+          request: input.request,
+          result,
+          reasoning,
+          retryMaxAttempts: input.retry.maxAttempts,
+          text,
+          toolCalls,
+          usage,
         })
       ) {
         const completedAt = Date.now();
@@ -276,58 +206,29 @@ export async function runGenerateText(input: {
       }
       const completedAt = Date.now();
 
-      recordGenerateTextDebug({
-        modelIoFullRetentionEnabled: input.modelIoFullRetentionEnabled,
-        attempt,
-        debugDir: input.debugDir,
-        isDev,
-        normalizedToolCalls: toolCalls,
-        options,
-        recordModelIO,
-        request: attemptRequest,
-        requestId: statusContext.requestId,
-        resolved,
-        result,
-        startedAt,
-      });
-      logGenerateTextDiagnostics({
+      return await completeGenerateText({
+        admission,
         attempt,
         completedAt,
-        logger: input.logger,
-        result,
-        statusContext,
-        startedAt,
-        toolCallCount: toolCalls?.length ?? 0,
-        usage,
-      });
-      await publishModelStatus(
-        {
-          ...statusContext,
-          attempt,
-          durationMs: completedAt - startedAt,
-          finishReason: result.finishReason,
-          requestHeaderCount,
-          requestHeaders,
-          responseHeaderCount: Object.keys(responseHeaders).length,
-          responseHeaders,
-          providerRequestId: providerRequestIdFromHeaders(responseHeaders),
-          timestamp: new Date(completedAt).toISOString(),
-          type: "model_request_completed",
-          usage,
-        },
-        statusPublishOptions(input, admission),
-      );
-
-      return {
-        text,
-        finishReason: result.finishReason,
-        usage,
+        isDev,
+        options,
         reasoning,
+        recordModelIO,
+        requestHeaderCount,
+        requestHeaders,
+        request: attemptRequest,
+        resolved,
+        responseHeaders,
+        result,
+        runner: input,
+        sources,
+        startedAt,
+        statusContext,
+        text,
         toolCalls,
         toolResults,
-        sources,
-        providerMetadata: result.providerMetadata as Record<string, unknown> | undefined,
-      };
+        usage,
+      });
     } catch (error) {
       // 合并后鉴权解析进入 attempt try；与 stream 一致保留网络前凭据缺失的类型化错误。
       if (
@@ -335,199 +236,33 @@ export async function runGenerateText(input: {
         error.code === ModelErrorCode.ModelRequestAuthMissing
       )
         throw error;
-      const completedAt = Date.now();
-      const classified = classifyModelFailure(error, input.request.abortSignal);
-      if (error instanceof RuntimeHeadersRefreshError) {
-        classified.message = error.message;
-        classified.retryable = false;
-      }
-      // off-peak 特判（仅 idle plan provider，见 offpeak-retry.ts）：排队 429 豁免预算、
-      // 3102（兼容旧 3001）以稳定标记落败触发 desktop 侧续跑。
-      const offPeak = resolveOffPeakFailureDecision({
-        offPeak: resolved.accountAccess?.mode === "off-peak",
-        failure: classified,
-        error: unwrapRetryError(error),
+      const retryState = await handleGenerateTextFailure({
+        admission,
+        attempt,
+        error,
+        isDev,
+        options,
+        recordModelIO,
+        requestHeaders,
+        requestHeaderCount,
+        requestInvocationCompleted,
+        requestMessages,
+        request: attemptRequest,
+        resolved,
+        retryBudget,
+        retryBudgetAttempt,
+        runner: input,
+        signatureRepairAttempted,
+        startedAt,
+        statusContext,
+        statusMaxAttempts,
       });
-      const failure: ClassifiedModelFailure =
-        offPeak?.kind === "ticketExpired"
-          ? {
-              ...classified,
-              retryable: false,
-              message: offPeakTicketExpiredMessage(classified.message),
-            }
-          : offPeak?.kind === "queued"
-            ? { ...classified, retryable: true, retryReason: ModelRetryReason.OffpeakQueued }
-            : classified;
-      const responseHeaders = sanitizeModelNetworkHeaders(
-        getResponseHeaders(unwrapRetryError(error)),
-      );
-      const repairedMessages =
-        !signatureRepairAttempted && resolved.providerKind === "anthropic"
-          ? repairReasoningHistoryAfterSignatureRejection(requestMessages, error)
-          : undefined;
-      const retryWithRepairedHistory = repairedMessages !== undefined;
-      if (repairedMessages) {
-        // 签名只对生成它的 thinking block 有效。明确收到签名校验 400 时，
-        // 只替换本次请求副本，并给一次不占普通 retry 预算的物理请求机会；不能通过
-        // 回退 attempt 复用 requestId，也不能改写 canonical history。
-        signatureRepairAttempted = true;
-        requestMessages = repairedMessages;
-        statusContext = {
-          ...statusContext,
-          maxAttempts: statusMaxAttempts(1),
-        };
-      }
-      const canRetryWithFailurePolicy =
-        offPeak?.kind === "queued"
-          ? true
-          : retryBudgetAllows(retryBudget, retryBudgetAttempt, input.retry.maxAttempts) &&
-            // workflow 流量（无上限预算）读策略表而不是分类器的 retryable；有界预算逐字不变。
-            retryAllowedByFailurePolicy(
-              failure,
-              retryBudget,
-              inspectProviderFailure(error).providerErrorCode,
-            );
-      const canRetry = retryWithRepairedHistory || canRetryWithFailurePolicy;
-
-      if (options) {
-        recordGenerateTextDebug({
-          modelIoFullRetentionEnabled: input.modelIoFullRetentionEnabled,
-          attempt,
-          debugDir: input.debugDir,
-          error,
-          isDev,
-          normalizedToolCalls: undefined,
-          options,
-          recordModelIO,
-          request: attemptRequest,
-          requestId: statusContext.requestId,
-          resolved,
-          startedAt,
-        });
-      }
-      await publishModelStatus(
-        {
-          ...statusContext,
-          attempt,
-          durationMs: completedAt - startedAt,
-          message: failure.message,
-          reason: failure.reason,
-          requestHeaderCount,
-          requestHeaders,
-          responseHeaderCount: Object.keys(responseHeaders).length,
-          responseHeaders,
-          retryable: canRetry,
-          statusCode: failure.statusCode,
-          ...modelFailureStatusFields(error, failure, options ? "response" : "prepare"),
-          timestamp: new Date(completedAt).toISOString(),
-          type: "model_request_failed",
-        },
-        {
-          ...statusPublishOptions(input, admission),
-          failureError: unwrapRetryError(error),
-        },
-      );
-
-      if (!canRetry) {
-        logRetryDelayDecision({
-          attempt,
-          canRetry,
-          failure,
-          logger: input.logger,
-          responseHeaders,
-          statusContext,
-        });
-        throw toAdapterError(error, failure, statusContext, attempt, {
-          errorPhase: requestInvocationCompleted ? "response" : "prepare",
-        });
-      }
-
-      if (retryWithRepairedHistory) {
-        input.logger?.warn("Retrying model request after thinking signature rejection", {
-          attempt,
-          event: "model.reasoning_signature_repair.retry",
-          maxAttempts: statusContext.maxAttempts,
-          nextAttempt: attempt + 1,
-          requestId: statusContext.requestId,
-          status: "waiting",
-        });
-        await publishRetryScheduledStatus(
-          input,
-          statusContext,
-          attempt,
-          0,
-          {
-            ...failure,
-            retryReason: ModelRetryReason.ReasoningSignatureRepair,
-          },
-          requestHeaders,
-          responseHeaders,
-          admission,
-        );
+      requestMessages = retryState.requestMessages;
+      signatureRepairAttempted = retryState.signatureRepairAttempted;
+      if (retryState.retryImmediately) {
         continue;
       }
-
-      const delayMs =
-        offPeak?.kind === "queued"
-          ? offPeak.delayMs
-          : calculateRetryDelay(input.retry, retryBudgetAttempt, failure.retryAfterMs);
-      logRetryDelayDecision({
-        attempt,
-        canRetry,
-        delayMs,
-        failure,
-        logger: input.logger,
-        responseHeaders,
-        statusContext,
-      });
-
-      await publishRetryScheduledStatus(
-        input,
-        statusContext,
-        attempt,
-        delayMs,
-        failure,
-        requestHeaders,
-        responseHeaders,
-        admission,
-      );
-
-      // 退避期间不持票：槽位让给别人，重试再准入。
-      admission.release();
-      try {
-        await sleep(delayMs, input.request.abortSignal);
-      } catch (sleepError) {
-        const sleepFailure = classifyModelFailure(sleepError, input.request.abortSignal);
-        const sleepResponseHeaders = sanitizeModelNetworkHeaders(
-          getResponseHeaders(unwrapRetryError(sleepError)),
-        );
-        await publishModelStatus(
-          {
-            ...statusContext,
-            attempt,
-            message: sleepFailure.message,
-            reason: sleepFailure.reason,
-            requestHeaderCount,
-            requestHeaders,
-            responseHeaderCount: Object.keys(sleepResponseHeaders).length,
-            responseHeaders: sleepResponseHeaders,
-            retryable: false,
-            statusCode: sleepFailure.statusCode,
-            ...modelFailureStatusFields(sleepError, sleepFailure, "connect"),
-            timestamp: new Date().toISOString(),
-            type: "model_request_failed",
-          },
-          {
-            // 退避期间票据已归还：这次取消不属于任何一次尝试，不转投票据。
-            ...statusPublishOptions(input),
-            failureError: unwrapRetryError(sleepError),
-          },
-        );
-        throw toAdapterError(sleepError, sleepFailure, statusContext, attempt, {
-          errorPhase: "connect",
-        });
-      }
-      if (offPeak?.kind === "queued") {
+      if (retryState.retryWithoutBudget) {
         // 排队等待不消耗重试预算：回退计数让 for 自增后原地重试，无限探测。
         attempt -= 1;
       }
@@ -540,110 +275,5 @@ export async function runGenerateText(input: {
     ModelErrorCode.ModelRequestFailed,
     "Model request failed before an attempt could complete",
     { context: { requestId: baseStatusContext.requestId } },
-  );
-}
-
-function serializeStructuredOutput(result: unknown): string {
-  const output = (result as { output?: unknown }).output;
-  if (output === undefined) {
-    throw new Error("Structured output is unavailable");
-  }
-  const serialized = JSON.stringify(output);
-  if (serialized === undefined) {
-    throw new Error("Structured output is unavailable");
-  }
-  return serialized;
-}
-
-function waitForGenerateTextOrAbort<T>(
-  pending: Promise<T>,
-  abortSignal: AbortSignal | undefined,
-): Promise<T> {
-  if (!abortSignal) {
-    return pending;
-  }
-
-  return new Promise<T>((resolve, reject) => {
-    const cleanup = (): void => {
-      abortSignal.removeEventListener("abort", onAbort);
-    };
-    const onAbort = (): void => {
-      cleanup();
-      reject(
-        abortSignal.reason instanceof Error
-          ? abortSignal.reason
-          : new Error("Model request was cancelled."),
-      );
-    };
-
-    if (abortSignal.aborted) {
-      onAbort();
-      return;
-    }
-
-    abortSignal.addEventListener("abort", onAbort, { once: true });
-    pending.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error: unknown) => {
-        cleanup();
-        reject(error);
-      },
-    );
-  });
-}
-
-function statusPublishOptions(
-  input: {
-    logger?: Logger;
-    request: AiSdkModelTextRequest;
-    statusSink?: ModelStatusSink;
-  },
-  admission?: AttemptAdmission,
-) {
-  return {
-    logger: input.logger,
-    requestStatusSink: input.request.statusSink,
-    statusSink: input.statusSink,
-    // 本次尝试的准入票据也是它的状态事件汇。
-    ...(admission?.ticket === undefined ? {} : { admissionTicket: admission.ticket }),
-  };
-}
-
-async function publishRetryScheduledStatus(
-  input: {
-    logger?: Logger;
-    request: AiSdkModelTextRequest;
-    statusSink?: ModelStatusSink;
-  },
-  statusContext: ReturnType<typeof createStatusContext>,
-  attempt: number,
-  delayMs: number,
-  failure: ReturnType<typeof classifyModelFailure>,
-  requestHeaders: Record<string, string>,
-  responseHeaders: Record<string, string>,
-  admission?: AttemptAdmission,
-): Promise<void> {
-  await publishModelStatus(
-    {
-      ...statusContext,
-      attempt,
-      delayMs,
-      message: failure.message,
-      nextAttempt: attempt + 1,
-      reason: failure.retryReason,
-      requestHeaderCount: Object.keys(requestHeaders).length,
-      requestHeaders,
-      responseHeaderCount: Object.keys(responseHeaders).length,
-      responseHeaders,
-      statusCode: failure.statusCode,
-      errorCode: failure.code,
-      retryAfterMs: failure.retryAfterMs,
-      timestamp: new Date().toISOString(),
-      type: "model_retry_scheduled",
-    },
-    statusPublishOptions(input, admission),
   );
 }
