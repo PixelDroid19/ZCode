@@ -20,7 +20,11 @@
     "clean": "node ../../scripts/clean-dist.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src",
-    "lint:fix": "oxlint --write src"
+    "lint:fix": "oxlint --write src",
+    "memory:benchmark": "node --import tsx bench/memory/run.ts",
+    "memory:benchmark:integration": "node --import tsx bench/memory/integration.ts",
+    "memory:benchmark:retrieval": "node --import tsx bench/memory/retrieval.ts",
+    "memory:benchmark:typecheck": "tsc -p tsconfig.bench.json --noEmit"
   },
   "dependencies": {
     "@zcode/adapters": "workspace:*",
