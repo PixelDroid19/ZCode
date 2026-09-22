@@ -111,9 +111,10 @@ export function usePluginReferenceCatalog(
   const rpcReady = resolution.rpcReady;
   // Runtime revisions are safe refreshes of the same authority. Keep their adopted entries visible;
   // any workspace/session/attachment/service transition gets a distinct authority scope.
+  // Picker 开关仅决定何时发起读取；把 enabled 当作 authority 会在关闭重开时清空已成功的 catalog。
   const authorityScope = useMemo(
     () => ({}),
-    [enabled, remoteSessionId, rpcReady, services, sessionId, workspaceIdentity, workspacePath],
+    [remoteSessionId, rpcReady, services, sessionId, workspaceIdentity, workspacePath],
   );
 
   useEffect(() => {

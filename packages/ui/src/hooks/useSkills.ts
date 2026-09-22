@@ -66,10 +66,11 @@ export function useSkills(options: UseSkillsOptions): ConversationSkillCatalogSt
   const requestKey = `${workspaceKey}|${remoteSessionId ?? "local"}|${options.sessionId ?? "draft"}|runtime:${runtimeRevision}`;
   // The authority scope intentionally excludes the runtime revision. A revision refresh may keep
   // the current session catalog on screen, while a service/workspace/session change must blank it.
+  // Picker 开关只控制请求生命周期，不改变 catalog authority；把 enabled 放进依赖会让关闭再打开时
+  // 产生新 scope，last-good 条目在刷新完成前消失。
   const authorityScope = useMemo(
     () => ({}),
     [
-      options.enabled,
       options.sessionId,
       options.workspaceIdentity,
       options.workspacePath,
