@@ -10,6 +10,18 @@ The fixture runs one isolated app-server process, one temporary workspace and a
 loopback OpenAI-compatible test server. The provider receives a non-secret,
 fixture-only credential. No request leaves the local machine.
 
+## App-server entry selection
+
+The acceptance fixture launches `src/main.ts` through `tsx` by default. When
+the test process sets `ZCODE_PROTOCOL_BUNDLE`, the fixture instead launches
+that value as the app-server bundle with the current Node executable and the
+`app-server` argument. The value must be an absolute path to an existing `.cjs`
+file. An invalid supplied path fails fixture creation; the fixture never falls
+back to the source entry after an explicit bundle was selected. This choice
+changes only the child-process entry point; the temporary workspace, HOME,
+provider config, loopback server, and other isolated child environment remain
+the same.
+
 ## Ownership and event order
 
 `AgentRuntime` remains the sole owner of the adopted capability snapshot and

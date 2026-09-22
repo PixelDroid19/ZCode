@@ -1,9 +1,9 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, extname, isAbsolute, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import {
@@ -26,6 +26,8 @@ export const LIVE_PROTOCOL_TOOL_NAME = "live_word_count";
 
 const FIXTURE_API_KEY = "fixture-key";
 const DEFAULT_TIMEOUT_MS = 10_000;
+const APP_SERVER_ARGUMENT = "app-server";
+const PROTOCOL_BUNDLE_EXTENSION = ".cjs";
 
 export interface OpenAiChatRequest {
   readonly authorization: string | undefined;
@@ -130,6 +132,29 @@ function errorFromUnknown(error: unknown): Error {
 function compactOutput(value: string): string {
   const normalized = value.trim();
   return normalized.length <= 4_000 ? normalized : `${normalized.slice(-4_000)}…`;
+}
+
+async function resolveAppServerArguments(bundlePath: string | undefined): Promise<string[]> {
+  if (bundlePath === undefined) {
+    const require = createRequire(import.meta.url);
+    const source = fileURLToPath(new URL("../src/main.ts", import.meta.url));
+    return [require.resolve("tsx/cli"), source, APP_SERVER_ARGUMENT];
+  }
+  if (!isAbsolute(bundlePath) || extname(bundlePath) !== PROTOCOL_BUNDLE_EXTENSION) {
+    throw new Error("ZCODE_PROTOCOL_BUNDLE must be an absolute path to an existing .cjs file");
+  }
+  let bundleInfo;
+  try {
+    bundleInfo = await stat(bundlePath);
+  } catch (error: unknown) {
+    throw new Error("ZCODE_PROTOCOL_BUNDLE must be an absolute path to an existing .cjs file", {
+      cause: error,
+    });
+  }
+  if (!bundleInfo.isFile()) {
+    throw new Error("ZCODE_PROTOCOL_BUNDLE must point to an existing .cjs file");
+  }
+  return [bundlePath, APP_SERVER_ARGUMENT];
 }
 
 export class LoopbackOpenAiServer {
@@ -463,6 +488,7 @@ export interface LiveProtocolFixture {
 }
 
 export async function createLiveProtocolFixture(): Promise<LiveProtocolFixture> {
+  const appServerArguments = await resolveAppServerArguments(process.env.ZCODE_PROTOCOL_BUNDLE);
   const root = await mkdtemp(join(tmpdir(), "zcode-live-protocol-"));
   const workspace = join(root, "workspace");
   const home = join(root, "home");
@@ -486,8 +512,6 @@ export async function createLiveProtocolFixture(): Promise<LiveProtocolFixture> 
       `${JSON.stringify(providerConfigFile(model.baseUrl), null, 2)}\n`,
       "utf8",
     );
-    const require = createRequire(import.meta.url);
-    const source = fileURLToPath(new URL("../src/main.ts", import.meta.url));
     const builtinConfig = fileURLToPath(
       new URL("../dist/provider/zcode-builtin.json", import.meta.url),
     );
@@ -509,7 +533,7 @@ export async function createLiveProtocolFixture(): Promise<LiveProtocolFixture> 
       http_proxy: "",
       no_proxy: "127.0.0.1,localhost",
     };
-    const child = spawn(process.execPath, [require.resolve("tsx/cli"), source, "app-server"], {
+    const child = spawn(process.execPath, appServerArguments, {
       cwd: workspace,
       env,
       stdio: ["pipe", "pipe", "pipe"],
