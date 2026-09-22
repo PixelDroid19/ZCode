@@ -36,6 +36,7 @@ import {
 } from "./tool-artifact-paths.js";
 
 export * from "./session-store.js";
+export * from "./experience-memory/sqlite-memory-store.js";
 
 // 内存 event store 实现已下沉到 @zcode/contracts，
 // 这里保持 `@zcode/adapters/storage` 的导出路径不变，避免调用方改 import。
