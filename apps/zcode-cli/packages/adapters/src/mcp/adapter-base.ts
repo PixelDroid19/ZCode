@@ -1,3 +1,4 @@
+import { McpConnectionAdmission } from "./pool-admission.js";
 import { randomUUID } from "node:crypto";
 import type { Logger, McpServerConfig, McpServerStatus } from "@zcode/contracts";
 import type { OfficialMcpAuthFailureKind } from "@zcode/shared";
@@ -15,6 +16,7 @@ export abstract class McpAdapterBase {
   protected readonly clientName: string;
   protected readonly clientVersion: string;
   protected readonly connectionContext?: McpConnectionContext;
+  protected readonly connectionAdmission: McpConnectionAdmission;
   protected readonly env?: NodeJS.ProcessEnv;
   protected readonly logger?: Logger;
   protected readonly mcpOAuth?: McpOAuthRuntimeOptions;
@@ -51,6 +53,7 @@ export abstract class McpAdapterBase {
     this.clientName = options.clientName ?? "zcode";
     this.clientVersion = options.clientVersion ?? "0.0.0";
     this.connectionContext = options.connectionContext;
+    this.connectionAdmission = options.connectionAdmission ?? new McpConnectionAdmission();
     this.env = options.env;
     this.logger = options.logger?.child({
       ...this.connectionContext,

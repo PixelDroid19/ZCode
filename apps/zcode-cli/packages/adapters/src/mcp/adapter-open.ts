@@ -91,7 +91,11 @@ export abstract class McpAdapterOpen extends McpAdapterFailure {
     let failureKind: McpServerFailureKind =
       config.type === "stdio" ? "process_start_failed" : "network_unreachable";
 
+    let releaseAdmission: (() => void) | undefined;
     try {
+      // caller 的 OAuth 等待预算可能先返回；容量必须覆盖真正的握手，避免后台连接无限增长。
+      releaseAdmission = await this.connectionAdmission.acquire(signal);
+      signal.throwIfAborted();
       const transportBundle = await this.createTransport(
         config,
         name,
@@ -248,9 +252,12 @@ export abstract class McpAdapterOpen extends McpAdapterFailure {
         trigger && config.type !== "stdio"
           ? resolveAuthorizationCodeOAuthConfig(config)
           : undefined;
-      if (trigger && authorizationCodeOAuthConfig && config.type !== "stdio") {
+      if (releaseAdmission && trigger && authorizationCodeOAuthConfig && config.type !== "stdio") {
         // negotiation 失败时 SDK 已关闭 transport，不可复用；Phase 2 也不需要 transport。
         await this.closeClientAndTransport(name, client, transport);
+        // 等待浏览器授权前释放容量，授权后重试重新排队，避免阻塞无关 server。
+        releaseAdmission();
+        releaseAdmission = undefined;
         const outcome = await this.runInteractiveOAuthAuthorization({
           config,
           generation,
@@ -308,6 +315,8 @@ export abstract class McpAdapterOpen extends McpAdapterFailure {
         transport,
         failureKind: negotiationFailureKind ?? failureKind,
       });
+    } finally {
+      releaseAdmission?.();
     }
   }
 

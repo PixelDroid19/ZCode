@@ -17,9 +17,10 @@ export function createMcpAdapterConnectionPool(
   return createMcpConnectionPool({
     logger: options.logger,
     telemetry: options.telemetry,
-    createAdapter: ({ connectionContext, workingDirectory }) =>
+    createAdapter: ({ connectionAdmission, connectionContext, workingDirectory }) =>
       createMcpAdapter({
         ...options,
+        connectionAdmission,
         connectionContext,
         workingDirectory: workingDirectory ?? options.workingDirectory,
       }),

@@ -11,6 +11,8 @@ import type {
   McpToolDescriptor,
 } from "@zcode/contracts";
 import type { McpTelemetryTracker } from "./telemetry.js";
+import { McpConnectionAdmission } from "./pool-admission.js";
+import { revalidateMcpPoolEntry, type PoolEntry } from "./pool-revalidation.js";
 import { createMcpPoolConnectionKey } from "./pool-identity.js";
 import { createMcpConnectionContext, type McpConnectionContext } from "./pool-context.js";
 
@@ -18,6 +20,7 @@ const DEFAULT_IDLE_GRACE_MS = 30_000;
 
 interface CreateMcpAdapterForPoolInput {
   connectionContext: McpConnectionContext;
+  connectionAdmission: McpConnectionAdmission;
   config: McpServerConfig;
   serverName: string;
   workingDirectory?: string;
@@ -38,20 +41,10 @@ export interface McpConnectionPool {
   stats(): { activeConnections: number; pendingCloseConnections: number };
 }
 
-interface PoolEntry {
-  adapter: McpPort;
-  closeTimer?: ReturnType<typeof setTimeout>;
-  connectionContext: McpConnectionContext;
-  connecting: Promise<McpServerStatus>;
-  key: string;
-  refs: Set<string>;
-  /** 同一 entry 的并发存活校验共享一次探测，避免重复 ping / 重复重连。 */
-  revalidating?: Promise<void>;
-  serverName: string;
-}
-
 export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpConnectionPool {
   const entries = new Map<string, PoolEntry>();
+  const connectionAdmission = new McpConnectionAdmission();
+  let closePromise: Promise<void> | undefined;
   const idleGraceMs = options.idleGraceMs ?? DEFAULT_IDLE_GRACE_MS;
   const logger = options.logger?.child({ module: "adapters.mcp.pool" });
   let closed = false;
@@ -59,6 +52,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
 
   const closeEntry = async (entry: PoolEntry): Promise<void> => {
     const startedAt = Date.now();
+    entry.lifetime.abort(new Error("MCP pooled connection is closed"));
     if (entry.closeTimer) clearTimeout(entry.closeTimer);
     entry.closeTimer = undefined;
     if (entries.get(entry.key) === entry) entries.delete(entry.key);
@@ -98,63 +92,6 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
     entry.closeTimer.unref?.();
   };
 
-  // 设置页的 mcpPort 是进程级的 `protocol-settings` lease，connectionKey 只由
-  // serverName + leaseId + config 组成，配置没变时每次 mcp/list 都命中同一个 entry 并直接返回
-  // 首次连接那个早已 resolve 的 promise——不重连、不探测、不打日志。HTTP/SSE MCP 被停掉又不会
-  // 派发 onclose，于是设置页永远显示"已连接并可用"，点多少次刷新都不变。
-  // 这里在显式要求 revalidate 时先确认连接仍然存活，已死则在同一个 entry 上原地重连
-  // （保持 entry 身份，其他共享该连接的 lease 不会被打断成 "not leased"）。
-  const revalidateEntry = async (
-    entry: PoolEntry,
-    config: McpServerConfig,
-    connectOptions: McpConnectOptions,
-  ): Promise<void> => {
-    if (entry.revalidating) {
-      await entry.revalidating;
-      return;
-    }
-    const run = (async () => {
-      const connected = await entry.connecting.then(
-        () => true,
-        () => false,
-      );
-      const state = connected
-        ? (await entry.adapter.status())[entry.serverName]?.status
-        : undefined;
-      // 进行中的握手（含 OAuth 待授权）和显式停用/待信任状态不打扰：
-      // 重连会作废浏览器里已打开的授权 URL 和 PKCE/state。
-      if (state === "connecting" || state === "disabled" || state === "untrusted") {
-        return;
-      }
-      if (state === "connected") {
-        const alive = (await entry.adapter.pingServer?.(entry.serverName)) ?? true;
-        if (alive) {
-          logger?.debug("MCP pooled connection revalidated", {
-            ...entry.connectionContext,
-            event: "mcp.pool.connection.revalidated",
-            mcpServerName: entry.serverName,
-            status: "completed",
-          });
-          return;
-        }
-      }
-      logger?.warn("MCP pooled connection is stale; reconnecting", {
-        ...entry.connectionContext,
-        event: "mcp.pool.connection.stale",
-        mcpConnectionState: state ?? "unknown",
-        mcpServerName: entry.serverName,
-        status: "started",
-      });
-      entry.connecting = entry.adapter.connectServer(entry.serverName, config, connectOptions);
-      // 失败由 status()/调用方 await entry.connecting 表达，这里不重复冒泡。
-      await entry.connecting.catch(() => undefined);
-    })();
-    entry.revalidating = run.finally(() => {
-      entry.revalidating = undefined;
-    });
-    await entry.revalidating;
-  };
-
   const acquireLease = (leaseOptions: { leaseId?: string; sessionId?: string } = {}): McpPort => {
     if (closed) throw new Error("MCP connection pool is closed");
     const leaseId = `${++leaseSequence}:${leaseOptions.leaseId ?? "lease"}`;
@@ -164,7 +101,11 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
     let leaseClosed = false;
     let sessionStartupReported = false;
 
+    const assertLeaseOpen = (): void => {
+      if (closed || leaseClosed) throw new Error("MCP connection lease is closed");
+    };
     const requireEntry = (serverName: string): PoolEntry => {
+      assertLeaseOpen();
       const key = leased.get(serverName);
       const entry = key ? entries.get(key) : undefined;
       if (!entry) throw new Error(`MCP server is not leased by this session: ${serverName}`);
@@ -198,6 +139,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
       config: McpServerConfig,
       connectOptions: McpConnectOptions = {},
     ): Promise<McpServerStatus> => {
+      assertLeaseOpen();
       const key = createMcpPoolConnectionKey({
         config,
         connectOptions,
@@ -206,6 +148,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
       });
       const previousKey = leased.get(serverName);
       let entry = entries.get(key);
+      const shouldRevalidate = entry !== undefined && connectOptions.revalidate === true;
       let ownerAdded = false;
       if (entry) {
         if (entry.closeTimer) clearTimeout(entry.closeTimer);
@@ -213,9 +156,6 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         const previousRefCount = entry.refs.size;
         entry.refs.add(leaseId);
         ownerAdded = entry.refs.size !== previousRefCount;
-        if (connectOptions.revalidate) {
-          await revalidateEntry(entry, config, connectOptions);
-        }
       } else {
         // 过去 pool、adapter 和 stdio PID 的日志彼此没有稳定关联键，无法从一个
         // session 追到实际 MCP 子进程。连接上下文在 entry 创建时固定，后续 lease 共用同一 ID。
@@ -232,15 +172,24 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         });
         const adapter = options.createAdapter({
           connectionContext,
+          connectionAdmission,
           config,
           serverName,
           workingDirectory: connectOptions.workingDirectory,
         });
+        const lifetime = new AbortController();
         entry = {
           adapter,
           connectionContext,
-          connecting: adapter.connectServer(serverName, config, connectOptions),
+          connecting: adapter.connectServer(serverName, config, {
+            ...connectOptions,
+            signal: AbortSignal.any([
+              lifetime.signal,
+              ...(connectOptions.signal ? [connectOptions.signal] : []),
+            ]),
+          }),
           key,
+          lifetime,
           refs: new Set([leaseId]),
           serverName,
         };
@@ -293,7 +242,16 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
           ...(sessionId ? { sessionId } : {}),
         });
       }
-      return await entry.connecting;
+      // 先登记 ownership 再 await；关闭 lease 必须能释放等待重连的 entry，不能被迟到结果复活。
+      if (shouldRevalidate) {
+        await revalidateMcpPoolEntry(entry, config, connectOptions, logger);
+      }
+      const status = await entry.connecting;
+      assertLeaseOpen();
+      if (leased.get(serverName) !== key || entries.get(key) !== entry) {
+        throw new Error("MCP connection lease changed");
+      }
+      return status;
     };
 
     const snapshot = async (): Promise<McpConnectionSnapshot> => {
@@ -344,6 +302,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
         servers: Record<string, McpServerConfig>,
         connectOptions: McpConnectOptions = {},
       ): Promise<McpConnectionSnapshot> {
+        assertLeaseOpen();
         configuredServers.clear();
         for (const [serverName, config] of Object.entries(servers)) {
           configuredServers.set(serverName, config);
@@ -357,6 +316,7 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
             acquire(serverName, config, connectOptions),
           ),
         );
+        assertLeaseOpen();
         return await snapshot();
       },
       async connectServer(
@@ -398,10 +358,16 @@ export function createMcpConnectionPool(options: McpConnectionPoolOptions): McpC
   return {
     acquireLease,
     async close(): Promise<void> {
+      if (closePromise) return await closePromise;
       closed = true;
+      const drained = connectionAdmission.close();
       const pending = [...entries.values()];
       entries.clear();
-      await Promise.all(pending.map(closeEntry));
+      closePromise = (async () => {
+        await Promise.all(pending.map(closeEntry));
+        await drained;
+      })();
+      await closePromise;
     },
     stats() {
       return {

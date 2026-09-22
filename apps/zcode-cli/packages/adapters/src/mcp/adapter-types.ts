@@ -13,6 +13,7 @@ import type {
   OfficialMcpAuthHeadersPort,
   OfficialMcpTrustedOriginRegistry,
 } from "@zcode/contracts";
+import type { McpConnectionAdmission } from "./pool-admission.js";
 import type { McpConnectionContext } from "./pool.js";
 import type { McpOAuthRuntimeOptions } from "./oauth.js";
 import type { SharedZCodeCredentialStore } from "../auth/shared-credentials.js";
@@ -33,6 +34,7 @@ export interface CreateMcpAdapterOptions {
   clientName?: string;
   clientVersion?: string;
   connectionContext?: McpConnectionContext;
+  connectionAdmission?: McpConnectionAdmission;
   env?: NodeJS.ProcessEnv;
   logger?: Logger;
   telemetry?: McpTelemetryTracker;
