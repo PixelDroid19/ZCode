@@ -1,4 +1,5 @@
 import type { TraceContext, TurnSteerInput, TurnSteerResult } from "@zcode/contracts";
+import { SubagentMessageNotAdmittedError } from "./message-channel.js";
 import type { RuntimeTaskMessageSink } from "../runtime-task/registry.js";
 
 interface SteerableRuntime {
@@ -10,10 +11,10 @@ export function createSubagentMessageSink(
   request: { traceContext: TraceContext },
 ): RuntimeTaskMessageSink {
   return {
-    async send(message) {
-      const result = await steerSubagentMessage(runtime, request, message);
+    async send(message, options) {
+      const result = await steerSubagentMessage(runtime, request, message, options?.signal);
       if (result.kind === "rejected") {
-        throw new Error(`Subagent message rejected: ${result.reason}`);
+        throw new SubagentMessageNotAdmittedError(`Subagent message rejected: ${result.reason}`);
       }
       return "steered";
     },
@@ -24,9 +25,11 @@ async function steerSubagentMessage(
   runtime: SteerableRuntime,
   request: { traceContext: TraceContext },
   message: { id: string; message: string; summary?: string; traceContext?: TraceContext },
+  signal?: AbortSignal,
 ): Promise<TurnSteerResult> {
   const input = formatSubagentCoordinatorMessage(message);
   for (let attempt = 0; attempt < 20; attempt++) {
+    signal?.throwIfAborted();
     const result = await runtime.steerTurn({
       delivery: "guide",
       inputPresentation: "coordinator_steer",
@@ -39,6 +42,7 @@ async function steerSubagentMessage(
     }
     await sleep(10);
   }
+  signal?.throwIfAborted();
   return runtime.steerTurn({
     delivery: "guide",
     inputPresentation: "coordinator_steer",

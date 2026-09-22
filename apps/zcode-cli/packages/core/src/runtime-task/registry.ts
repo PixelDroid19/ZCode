@@ -37,7 +37,10 @@ export interface RuntimeTaskPendingMessage {
 }
 
 export interface RuntimeTaskMessageSink {
-  send(message: RuntimeTaskPendingMessage): Promise<"queued" | "steered">;
+  send(
+    message: RuntimeTaskPendingMessage,
+    options?: { signal?: AbortSignal },
+  ): Promise<"queued" | "steered">;
 }
 
 export interface RuntimeTaskSnapshot extends SubagentTaskSnapshot {
