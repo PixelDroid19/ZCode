@@ -31,11 +31,14 @@ const selection = { providerId, modelId, options: { reasoningLevel: "low" } };
 type RequestBody = {
   messages?: Array<{ role?: string; content?: unknown }>;
   tools?: Array<{ name?: string; function?: { name?: string } }>;
+  tool_choice?: unknown;
 };
 type ProviderObservation = {
   phase: "foreground" | "extraction";
   hasMemoryTool: boolean;
-  responseKind: "text" | "memory_save";
+  hasFinishTool?: boolean;
+  requiredChoice?: boolean;
+  responseKind: "text" | "memory_save" | "finish";
 };
 const providerObservations: ProviderObservation[] = [];
 
@@ -72,6 +75,15 @@ function bodyHasMemoryTool(body: RequestBody): boolean {
     body.tools?.some((tool) => tool.name === "Memory" || tool.function?.name === "Memory") ?? false
   );
 }
+function bodyHasFinishTool(body: RequestBody): boolean {
+  return (
+    body.tools?.some(
+      (tool) =>
+        tool.name === "FinishMemoryExtraction" ||
+        tool.function?.name === "FinishMemoryExtraction",
+    ) ?? false
+  );
+}
 function responseBody(message: Record<string, unknown>, finishReason: string) {
   return JSON.stringify({
     id: "local-" + (providerObservations.length + 1),
@@ -97,13 +109,32 @@ const server = createServer((request, response) => {
       const hasMemoryTool = bodyHasMemoryTool(body);
       if (extraction) {
         if (bodyHasToolResult(body)) {
-          providerObservations.push({ phase: "extraction", hasMemoryTool, responseKind: "text" });
+          providerObservations.push({
+            phase: "extraction",
+            hasMemoryTool,
+            hasFinishTool: bodyHasFinishTool(body),
+            requiredChoice: body.tool_choice === "required",
+            responseKind: "finish",
+          });
           response
             .writeHead(200, { "content-type": "application/json" })
             .end(
               responseBody(
-                { role: "assistant", content: "Deterministic extraction completed." },
-                "stop",
+                {
+                  role: "assistant",
+                  content: null,
+                  tool_calls: [
+                    {
+                      id: "local-extraction-finish",
+                      type: "function",
+                      function: {
+                        name: "FinishMemoryExtraction",
+                        arguments: JSON.stringify({ reason: "All durable facts were saved." }),
+                      },
+                    },
+                  ],
+                },
+                "tool_calls",
               ),
             );
           return;
@@ -111,6 +142,8 @@ const server = createServer((request, response) => {
         providerObservations.push({
           phase: "extraction",
           hasMemoryTool,
+          hasFinishTool: bodyHasFinishTool(body),
+          requiredChoice: body.tool_choice === "required",
           responseKind: "memory_save",
         });
         const input = {
@@ -262,8 +295,17 @@ try {
     throw new Error("automatic extraction made no model call");
   if (learned.records.length !== 1)
     throw new Error("expected one extracted record, got " + learned.records.length);
-  if (extractionRequests.length < 1 || extractionRequests.some((item) => !item.hasMemoryTool)) {
-    throw new Error("extraction request did not receive the Memory tool");
+  if (
+    extractionRequests.length < 2 ||
+    extractionRequests.some(
+      (item) => !item.hasMemoryTool || !item.hasFinishTool || !item.requiredChoice,
+    ) ||
+    !extractionRequests.some((item) => item.responseKind === "finish")
+  ) {
+    throw new Error(
+      "extraction did not use required typed Memory and finish tools: " +
+        JSON.stringify(extractionRequests),
+    );
   }
 
   await copyMemory(root, "learn", "query-on");

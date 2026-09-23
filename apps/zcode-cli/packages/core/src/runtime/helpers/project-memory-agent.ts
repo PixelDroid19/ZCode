@@ -21,6 +21,21 @@ export interface ProjectMemoryAgentContext {
   traceContext: TraceContext;
 }
 
+export const FINISH_MEMORY_EXTRACTION_TOOL_NAME = "FinishMemoryExtraction";
+
+const finishMemoryExtractionTool: ModelToolContract = {
+  name: FINISH_MEMORY_EXTRACTION_TOOL_NAME,
+  description:
+    "Finish memory extraction after all useful records have been saved or when there is nothing durable to save. This does not write memory.",
+  inputSchema: {
+    type: "object",
+    properties: { reason: { type: "string" } },
+    required: ["reason"],
+    additionalProperties: false,
+  },
+  readOnly: true,
+};
+
 export function captureProjectMemoryAgentContext(
   runtime: AgentRuntimeInternal,
   input: {
@@ -55,10 +70,13 @@ export function captureProjectMemoryAgentContext(
     causation: runtime.agentTelemetry.captureCausation(),
     model,
     operation: input.operation,
-    tools: runtime
-      .getTools(model)
-      .filter((tool) => tool.name === "Memory")
-      .map((tool) => ({ ...tool })),
+    tools: [
+      ...runtime
+        .getTools(model)
+        .filter((tool) => tool.name === "Memory")
+        .map((tool) => ({ ...tool })),
+      finishMemoryExtractionTool,
+    ],
     traceContext: input.traceContext,
   };
 }
@@ -68,7 +86,7 @@ export function buildProjectMemoryAgentProviderMessages(prompt: string): ModelIn
     {
       role: "system",
       content:
-        "Extract durable experience using only the Memory tool and the evidence transcript supplied by the user message.",
+        "Extract durable experience using Memory for every write, then call FinishMemoryExtraction. If nothing durable exists, call FinishMemoryExtraction immediately. Use only typed tools; never describe tool calls in text.",
     },
     { role: "user", content: prompt },
   ];

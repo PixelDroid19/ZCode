@@ -90,15 +90,66 @@ evidence/history are fetched on demand. Failed and recurring experiences remain
 searchable as warnings.
 
 The existing after-turn extraction lifecycle writes through the same Memory tool
-and validates evidence against durable messages. Short real-user confirmations
+and validates evidence against durable messages. Its model response must use a
+typed tool call: `Memory` for a mutation or the extraction-only completion tool
+when no more writes are needed. The completion tool has no storage side effect.
+The runtime sends `toolChoice=required` through the shared model request contract
+on every extraction step; ordinary agent turns retain their existing choice.
+Prose, including JSON that merely describes a tool call, is never executed and never advances the
+extraction cursor, even when the same response also contains a completion tool call.
+The completion input must satisfy its typed contract. A missing completion, failed mutation or exhausted step budget
+leaves the cursor in place for a later attempt. A successful completion advances
+only across the evidence batch actually processed. Short real-user confirmations
 must not be skipped by a minimum-word heuristic. Extraction does not interpret a
 completed model turn as a confirmed fix. It has no source-code or shell write
 capability. Explicit memory tools work when automatic extraction is disabled.
 Coalesced work is consumed in bounded batches, with limited earlier context. The
 cursor advances only over the batch actually processed; a failed write preserves
 that boundary for retry instead of silently skipping older pending evidence.
+If a write commits but a later extraction step fails, its operation identity is
+derived from the complete mutation input, including evidence, rather than the
+provider's transient tool-call ID. SQLite's existing durable receipt replays an
+identical retry without writing the same topic twice; the provider's call ID is
+still used in the model-facing tool result. A changed input, including new
+evidence, has a different identity and must reconcile with the existing record
+through the normal conflict and update rules. No second memory store is created.
+Forgetting a record tombstones its prior receipts, so replaying the exact old
+mutation cannot recreate it. The receipt does not block a differently formed
+save of the same topic or source evidence; source-level suppression after
+forget is a separate store invariant and is not claimed here.
+If a retry supplies the current revision after a previously committed update,
+SQLite returns the current record without appending another revision when the
+requested content, outcome, review time and cited evidence are already present.
+Changed state or evidence metadata (including the source summary) still follows
+normal revision checks.
 Ordinary headless CLI execution also enables extraction and gives it a bounded
 drain before closing; the explicit memory benchmark mode retains its full drain.
+
+```mermaid
+sequenceDiagram
+    participant T as Completed turn
+    participant X as Extraction scheduler and cursor owner
+    participant L as Selected model
+    participant M as Memory tool and SQLite owner
+    T->>X: Durable evidence snapshot
+    X->>L: Evidence and required typed tool choice
+    alt Memory call
+        L->>X: Typed Memory call
+        X->>M: Validated mutation with operation ID
+        M-->>X: Committed result or error
+        X->>L: Tool result; request next typed choice
+    end
+    opt Retry of an identical committed mutation
+        X->>M: Same deterministic operation ID
+        M-->>X: Replay durable receipt; do not write again
+    end
+    alt Extraction-only completion after successful calls
+        L->>X: Typed FinishMemoryExtraction call
+        X->>X: Advance cursor to processed boundary
+    else Prose, failed call, or step budget exhausted
+        X->>X: Keep cursor for later retry
+    end
+```
 
 Existing Markdown memories remain available as user-authored reference files.
 The old automatic Markdown writer is replaced when the structured store is

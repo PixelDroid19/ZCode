@@ -150,6 +150,12 @@ export function updateMemory(
     }
     assertExpectedRevision(current, input.expectedRevision);
 
+    if (isAlreadyAppliedEvidenceUpdate(current, input)) {
+      // 提取重试可能把预期修订更新到当前值；相同证据和状态不应再次追加历史。
+      writeReceipt(db, access, input.operationId, payloadHash, current, [current.id]);
+      return current;
+    }
+
     const content = input.content ?? current.content;
     const contentChanged = stableStringify(content) !== stableStringify(current.content);
     const defaultedOutcome: MemoryOutcome = contentChanged
@@ -212,6 +218,24 @@ export function updateMemory(
     writeReceipt(db, access, input.operationId, payloadHash, updated, [updated.id]);
     return updated;
   });
+}
+
+function isAlreadyAppliedEvidenceUpdate(current: MemoryRecord, input: MemoryUpdate): boolean {
+  const evidence = input.evidence;
+  if (!evidence?.length) return false;
+  if (input.content !== undefined && stableStringify(input.content) !== stableStringify(current.content))
+    return false;
+  if (input.outcome !== undefined && input.outcome !== current.outcome) return false;
+  if (
+    input.reviewAfter !== undefined &&
+    (input.reviewAfter ?? undefined) !== current.reviewAfter
+  )
+    return false;
+  return evidence.every((item) => current.evidence.some((stored) => sameEvidence(item, stored)));
+}
+
+function sameEvidence(left: MemoryEvidence, right: MemoryEvidence): boolean {
+  return stableStringify(left) === stableStringify(right);
 }
 
 export function forgetMemory(db: DatabaseSync, access: MemoryAccess, input: MemoryForget): void {

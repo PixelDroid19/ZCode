@@ -190,6 +190,7 @@ export class AiSdkModelAdapter {
       return {
         messages: request.messages,
         tools: request.tools,
+        toolChoice: request.toolChoice,
         responseJsonSchema: request.responseJsonSchema,
         abortSignal: request.abortSignal,
         maxOutputTokens: request.options.maxOutputTokens,

@@ -13,8 +13,10 @@ import {
   buildProjectMemoryAgentProviderMessages,
   captureProjectMemoryAgentContext,
   createProjectMemoryAgentToolExecutor,
+  FINISH_MEMORY_EXTRACTION_TOOL_NAME,
   type ProjectMemoryAgentContext,
 } from "./project-memory-agent.js";
+import { extractionToolCallId } from "./project-memory-extraction-id.js";
 import { isStructuredMemoryEnabled } from "./project-memory.js";
 import { buildStructuredExtractionPrompt } from "./project-memory-transcript.js";
 
@@ -263,6 +265,7 @@ async function executeProjectMemoryExtraction(
       const executor = createProjectMemoryAgentToolExecutor(runtime, snapshot);
       let executedAny = false;
       let failedAny = false;
+      let completed = false;
 
       for (let step = 0; step < EXTRACTION_MAX_STEPS; step += 1) {
         signal.throwIfAborted();
@@ -270,23 +273,53 @@ async function executeProjectMemoryExtraction(
           abortSignal: signal,
           messages,
           options: auxiliaryModelOptions(snapshot.model),
+          toolChoice: "required",
           tools: [...snapshot.tools],
         });
         const toolCalls = response.toolCalls ?? [];
+        if (response.text.trim()) {
+          // 文本中的 JSON 不是写入；即使同组含结束工具，也不能把未执行的操作当成完成。
+          failedAny = true;
+          break;
+        }
         messages.push(assistantMessage(response.text, toolCalls));
-        if (toolCalls.length === 0) break;
+        if (toolCalls.length === 0) {
+          // 真实模型可能把 Memory 调用写成 JSON 文本；文本不是已执行的工具调用，不能据此推进游标。
+          failedAny = true;
+          break;
+        }
+        const finishIndex = toolCalls.findIndex(
+          (call) => call.name === FINISH_MEMORY_EXTRACTION_TOOL_NAME,
+        );
+        if (finishIndex >= 0 && finishIndex !== toolCalls.length - 1) {
+          // 结束信号之后不能再执行写入；整组调用先拒绝，避免提交后又宣称提取已完成。
+          failedAny = true;
+          break;
+        }
 
         for (const toolCall of toolCalls) {
           signal.throwIfAborted();
+          if (toolCall.name === FINISH_MEMORY_EXTRACTION_TOOL_NAME) {
+            if (!isValidFinishMemoryExtractionInput(toolCall.input)) {
+              failedAny = true;
+              break;
+            }
+            completed = true;
+            continue;
+          }
           if (toolCall.name !== "Memory") {
             failedAny = true;
             messages.push(
-              toolErrorMessage(toolCall, "Only the Memory tool is available to this extraction."),
+              toolErrorMessage(toolCall, "Only Memory and FinishMemoryExtraction are available."),
             );
             continue;
           }
           const result = await executor.execute(
-            { id: toolCall.id, name: toolCall.name, input: toolCall.input },
+            {
+              id: extractionToolCallId(toolCall),
+              name: toolCall.name,
+              input: toolCall.input,
+            },
             { signal, traceContext: snapshot.traceContext },
           );
           executedAny ||= result.success;
@@ -299,12 +332,12 @@ async function executeProjectMemoryExtraction(
             toolName: toolCall.name,
           });
         }
-        if (step === EXTRACTION_MAX_STEPS - 1) break;
+        if (completed || failedAny) break;
       }
 
-      if (failedAny) {
-        // Partial success must not move the cursor; otherwise a failed mutation loses its evidence.
-        telemetry.finishFailed("execute", "internal", new Error("Memory extraction tool failed."));
+      if (failedAny || !completed) {
+        // 写入失败或模型未明确结束时保留游标，让后续提取能够再次处理同一批证据。
+        telemetry.finishFailed("execute", "internal", new Error("Memory extraction did not complete."));
         return { status: "error" };
       }
       telemetry.finishCompleted();
@@ -321,6 +354,16 @@ async function executeProjectMemoryExtraction(
       return { status: "error" };
     }
   });
+}
+
+function isValidFinishMemoryExtractionInput(input: unknown): boolean {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) return false;
+  const fields = Object.keys(input);
+  return (
+    fields.length === 1 &&
+    fields[0] === "reason" &&
+    typeof (input as { reason?: unknown }).reason === "string"
+  );
 }
 
 function messagesAfterCursor(

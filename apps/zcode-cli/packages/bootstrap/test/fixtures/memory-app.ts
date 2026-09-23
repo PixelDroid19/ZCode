@@ -25,13 +25,13 @@ const optionSpecs = { maxOutputTokens: { max: 2_048 }, reasoningLevel: { values:
 export type MemoryApp = Awaited<ReturnType<typeof createZCodeApp>>;
 export type MemoryScript = (request: ModelRequest) => ModelTextResult | Promise<ModelTextResult>;
 
-export function response(text = "Done", input?: unknown): ModelTextResult {
+export function response(text = "Done", input?: unknown, toolName = "Memory"): ModelTextResult {
   return {
     text,
     finishReason: input ? "tool_calls" : "stop",
     usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
     ...(input
-      ? { toolCalls: [{ id: `memory-${crypto.randomUUID()}`, name: "Memory", input }] }
+      ? { toolCalls: [{ id: `memory-${crypto.randomUUID()}`, name: toolName, input }] }
       : {}),
   };
 }

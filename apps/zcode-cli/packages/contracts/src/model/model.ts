@@ -5,6 +5,7 @@ import type {
   ModelProviderId,
   ModelStreamEvent,
   ModelTextResult,
+  ModelToolChoice,
   ModelToolContract,
 } from "./index.js";
 import { modelSelectionSchema, type ModelSelection } from "@zcode/shared/model-selection";
@@ -31,6 +32,7 @@ export interface ModelOptions {
 export interface ModelRequest {
   messages: ModelInputMessage[];
   tools?: ModelToolContract[];
+  toolChoice?: ModelToolChoice;
   responseJsonSchema?: JsonSchema;
   options?: ModelOptions;
   abortSignal?: AbortSignal;
