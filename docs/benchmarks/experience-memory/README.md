@@ -72,3 +72,57 @@ against an expanded held-out corpus and these retained failures. Separately, com
 the paired live evaluation before claiming that automatic memory improves the agent's
 task success or reduces total tokens. This measurement change does not alter production
 memory behavior or introduce a speculative retrieval fix.
+
+## OpenRouter free-model follow-up — 2026-09-23 UTC
+
+The user supplied an OpenRouter test key. The key was used only in a temporary personal
+provider configuration and is absent from this repository and the report. The requested
+unsuffixed model IDs were priced in OpenRouter's live catalog, so these probes used the
+separate `:free` variants. `z-ai/glm-5.2:free` returned text through ZCode, but a typed
+tool request returned HTTP 404 (“No endpoints found that support tool use”). It could
+not run this tool-dependent memory protocol. `nex-agi/nex-n2.5-pro:free` returned a
+typed tool call through ZCode and was selected for the live ON/OFF run. OpenRouter
+[documents the free variant suffix](https://openrouter.ai/docs/guides/routing/model-variants/free).
+
+The first Nex attempt exposed a real extraction failure: the model described a Memory
+call in JSON text, while ZCode treated the absence of a typed call as a successful
+no-op and advanced past the evidence. SQLite still contained zero records. The
+production correction now requires typed `Memory` or `FinishMemoryExtraction` calls
+and leaves the cursor in place on prose, invalid completion or a failed write. A
+separate real-model pilot after the correction persisted one user-confirmed project
+record; the deterministic HTTP integration and the partial-write replay integration
+pass on the final correction commit `55134a0`.
+
+The second Nex run completed teaching and all eight paired queries in replica 0, then
+hit OpenRouter HTTP 429 on both self-contained control queries and the first extraction
+of replica 1. Its status is **blocked**, not a completed two-replica benchmark. The
+predeclared strict score, which counts those provider failures as failed cases, is
+**5/8 ON versus 2/8 OFF** in the one evaluated replica:
+
+| Case                                   |    ON    |   OFF    |
+| -------------------------------------- | :------: | :------: |
+| Earlier repair and cause               |   Pass   |   Fail   |
+| Portable preference in another project |   Pass   |   Fail   |
+| Recurrence after attempted fix         |   Pass   |   Fail   |
+| Corrected latest value                 |   Pass   |   Fail   |
+| Project isolation                      |   Fail   |   Pass   |
+| Unknown fact abstention                |   Pass   |   Pass   |
+| Paraphrased incident                   |   Fail   |   Fail   |
+| Self-contained control                 | HTTP 429 | HTTP 429 |
+
+The ON isolation failure was an overconfident answer; inspection of the recorded model
+context did not show the foreign project's private value. The ON paraphrase answer
+contained the value with a field prefix rather than the exact JSON value required by
+the fixed rubric. Neither observation should be relabeled as a pass. Provider usage
+is incomplete because failed requests had no usage, so the recorded tokens cannot
+support a cost comparison. The 429 response headers reported 0 of 50 requests
+remaining and a reset of `2026-09-24T00:00:00Z`; no paid model was used.
+
+[The raw synthetic Nex report](2026-09-23-openrouter-nex-partial.json) contains the
+prompts, model outputs, case grading, snapshots, timing and provider-reported usage.
+It was produced from an uncommitted intermediate source snapshot (identified by its
+`sourceSha256`), after typed extraction was enabled but before the final retry and
+completion hardening in `55134a0`. The final code therefore needs a fresh two-replica
+run after quota resets before anyone claims a measured utility improvement. The
+receipt mechanism also does not guarantee that a differently formed save cannot
+reintroduce a forgotten fact; source-level suppression remains a separate design task.
