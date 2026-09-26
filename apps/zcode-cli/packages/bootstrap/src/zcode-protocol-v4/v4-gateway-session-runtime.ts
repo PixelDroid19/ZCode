@@ -194,6 +194,7 @@ export class ConversationV4GatewaySessionRuntime extends ConversationV4GatewayCo
       ),
     );
     this.attachmentUploads.clearSession(sessionId);
+    this.indexFanoutThrottle.clearSession(sessionId);
     for (const [key, entry] of this.binaryReadCache) {
       if (entry.sessionId === sessionId) this.deleteBinaryReadCacheEntry(key);
     }

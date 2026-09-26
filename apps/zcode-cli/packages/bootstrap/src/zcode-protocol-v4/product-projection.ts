@@ -170,15 +170,17 @@ export class ProductProjection {
    * projection 超过 logical frame assembly 上限时，如果先修改当前实例再等
    * wire encoder 报错，权威内存态会永久停在“无法发 snapshot”的状态。候选实例同时
    * 隔离 snapshot 与 reducer 的各类 side-map；拒绝时当前实例完全不变，客户端仍可从
-   * 最后一个可传输 snapshot 恢复。
+   * 最后一个可传输 snapshot 恢复。`accept` 同时收到本次归约实际产出的 deltas，供 publisher
+   * 对有可靠字节上界的事件快路径裁决；不能用预演代替，因为 subagent 与命令 actions
+   * materialization 也会产出 delta。
    */
   applyEventAtomically(
     event: SessionEvent,
-    accept: (snapshot: ConversationSnapshot) => boolean,
+    accept: (snapshot: ConversationSnapshot, deltas: readonly ConversationDelta[]) => boolean,
   ): ConversationDelta[] | null {
     const candidate = this.cloneProjection();
     const deltas = candidate.applyEvent(event);
-    if (!accept(candidate.snapshot)) return null;
+    if (!accept(candidate.snapshot, deltas)) return null;
     this.adoptProjection(candidate);
     return deltas;
   }

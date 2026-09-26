@@ -11,14 +11,23 @@ import {
   v4ConversationSubscribeParamsSchema,
 } from "@zcode/shared/zcode-protocol-v4";
 import { SessionsIndexPublisher } from "./sessions-index-publisher.js";
+import { SessionsIndexFanoutThrottle } from "./sessions-index-fanout-throttle.js";
 import { WorkspaceConfigPublisher } from "./workspace-config-publisher.js";
 
 import { ConversationV4GatewayDispatch } from "./v4-gateway-dispatch.js";
 import type { V4SubscribeDispatchResult } from "./v4-gateway-types.js";
 
 export class ConversationV4GatewayIndex extends ConversationV4GatewayDispatch {
+  protected readonly indexFanoutThrottle = new SessionsIndexFanoutThrottle({
+    publish: (sessionId) => this.publishCurrentSummaryToIndex(sessionId),
+  });
   protected fanOutToIndex(sessionId: string, event: SessionEvent): void {
     if (event.type === SessionEventType.ModelStreaming) return;
+    // 合并高频工作流进度，终态仍经同一 publisher 在窗口结束时送达。
+    if (event.type === SessionEventType.DynamicWorkflowRunProgress) {
+      this.indexFanoutThrottle.request(sessionId);
+      return;
+    }
     this.publishCurrentSummaryToIndex(sessionId);
   }
 
@@ -31,6 +40,7 @@ export class ConversationV4GatewayIndex extends ConversationV4GatewayDispatch {
    * task-index syncer 无法观察到 draft→visible，也就不会创建侧栏 task row。
    */
   protected publishCurrentSummaryToIndex(sessionId: string): void {
+    this.indexFanoutThrottle.notePublished(sessionId);
     const getWorkspaceId = this.host.getSessionWorkspaceId;
     if (!getWorkspaceId) return;
     try {

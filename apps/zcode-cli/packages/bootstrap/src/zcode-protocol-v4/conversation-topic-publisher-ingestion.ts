@@ -1,10 +1,6 @@
 import { SessionEventType, type SessionEvent } from "@zcode/contracts";
 import type { ConversationDelta } from "@zcode/shared/zcode-protocol-v4";
-import {
-  PROTOCOL_V4_LIMITS,
-  filterConversationDeltasForProfile,
-  utf8JsonByteLength,
-} from "@zcode/shared/zcode-protocol-v4";
+import { PROTOCOL_V4_LIMITS, utf8JsonByteLength } from "@zcode/shared/zcode-protocol-v4";
 import {
   appendConversationSubscriberBuffer,
   coldHydrationJsonByteLength,
@@ -16,6 +12,7 @@ import {
   type ConversationTopicPublisherOptions,
 } from "./conversation-topic-publisher-support.js";
 import { ConversationTopicPublisherState } from "./conversation-topic-publisher-state.js";
+import { workflowRunDeltaGrowthUpperBound } from "./conversation-workflow-run-deltas.js";
 
 export abstract class ConversationTopicPublisherIngestion extends ConversationTopicPublisherState {
   /** 应用权威事件：投影推进 + 日志记账 + 扇出到各订阅者 flush buffer。 */
@@ -36,12 +33,21 @@ export abstract class ConversationTopicPublisherIngestion extends ConversationTo
       this.wireSnapshotBytesUpperBound += streamingUpperBound;
     } else {
       let candidateBytes = 0;
-      deltas = this.projection.applyEventAtomically(event, (snapshot) => {
+      let nextUpperBound = 0;
+      deltas = this.projection.applyEventAtomically(event, (snapshot, produced) => {
+        // Keyed workflow deltas carry all snapshot growth they cause. Any other op, including a
+        // whole-key fallback, must use exact candidate-snapshot measurement.
+        const growth = workflowRunDeltaGrowthUpperBound(produced);
+        if (growth !== null && this.wireSnapshotBytesUpperBound + growth <= projectionLimit) {
+          nextUpperBound = this.wireSnapshotBytesUpperBound + growth;
+          return true;
+        }
         candidateBytes = this.measureWireSnapshotBytes(this.getWireSnapshot(snapshot));
+        nextUpperBound = candidateBytes;
         return candidateBytes <= projectionLimit;
       });
       if (deltas === null) throw new ProjectionPayloadTooLargeError(candidateBytes);
-      this.wireSnapshotBytesUpperBound = candidateBytes;
+      this.wireSnapshotBytesUpperBound = nextUpperBound;
     }
     this.log.push({ seq: event.sequenceNumber, deltas });
     while (this.log.length > this.retention) {
@@ -51,7 +57,7 @@ export abstract class ConversationTopicPublisherIngestion extends ConversationTo
     if (deltas.length === 0) return;
     for (const subscription of this.subscriptions.values()) {
       if (subscription.resyncRequired) continue;
-      const filtered = filterConversationDeltasForProfile(deltas, subscription.profile);
+      const filtered = this.encodeDeltasForSubscription(deltas, subscription);
       const next = appendConversationSubscriberBuffer(subscription.buffer, filtered, {
         maxOps: this.subscriberBufferMaxOps,
         maxBytes: this.subscriberBufferMaxBytes,
@@ -160,6 +166,7 @@ export abstract class ConversationTopicPublisherIngestion extends ConversationTo
         const wireDeltas = deltas.filter((delta) => {
           if (delta.op === "state.updated" || delta.op === "row.appended") return true;
           if (delta.op === "row.removed") return false;
+          if (delta.op === "workflowRun.updated" || delta.op === "workflowRun.removed") return true;
           wireRowIds ??= new Set(
             snapshot.rows.window
               .slice(-PROTOCOL_V4_LIMITS.snapshotTailWindowRows)

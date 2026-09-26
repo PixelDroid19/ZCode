@@ -33,6 +33,10 @@ import {
 } from "./workflow-driver-helpers.js";
 import { seedActorSession } from "./workflow-driver-transcript.js";
 import type { AgentRuntimeWorkflowDriverDeps, SessionState } from "./workflow-driver-types.js";
+import {
+  createActorSessionQuiescence,
+  type ActorSessionQuiescenceLedger,
+} from "./workflow-driver-quiescence.js";
 
 export abstract class AgentRuntimeWorkflowDriverSession {
   readonly journal: JournalStorePort;
@@ -60,6 +64,7 @@ export abstract class AgentRuntimeWorkflowDriverSession {
   protected readonly modelFailureHost: ModelFailureHost;
   /** run 级 stall 时钟：所有 actor 的成功 / 重试节拍汇到这一只表。 */
   protected readonly stallClock: RunStallClock;
+  protected readonly quiescence: ActorSessionQuiescenceLedger;
 
   protected abstract makeSubmitPort(sessionId: SessionId): WorkflowSubmitPort;
   protected abstract makeEscalatePort(
@@ -80,7 +85,14 @@ export abstract class AgentRuntimeWorkflowDriverSession {
     this.deps = deps;
     this.sink = sink;
     this.journal = deps.journal;
-    this.emit = deps.emit;
+    // 引擎结算是 ask 的唯一终点；保持事件引用不变供 journal sequence capture 校验。
+    this.emit =
+      deps.seatGate === undefined
+        ? deps.emit
+        : (event) => {
+            if (event.type === "node-settled") deps.seatGate?.askSettled(event.instance);
+            deps.emit(event);
+          };
     this.escalationHost = {
       deps,
       sessions: this.sessions,
@@ -101,6 +113,11 @@ export abstract class AgentRuntimeWorkflowDriverSession {
       ...(deps.clock?.stallAfterMs === undefined ? {} : { afterMs: deps.clock.stallAfterMs }),
       onStalled: (info) => this.sink.runStalled(info),
     });
+    this.quiescence = createActorSessionQuiescence({
+      ...(deps.clock === undefined ? {} : { clock: deps.clock }),
+      ...(deps.clock?.quiesceMs === undefined ? {} : { quiesceMs: deps.clock.quiesceMs }),
+    });
+    deps.onQuiescenceProbe?.(this.quiescence);
     if (deps.concurrency !== undefined) {
       // 扇出只到在该 key 上有在飞/排队请求的 run，所以订阅本身可以在构造时一次做完。
       this.concurrencyUnsubscribe = deps.concurrency.subscribe(deps.runId ?? "run", (change) => {
@@ -155,6 +172,9 @@ export abstract class AgentRuntimeWorkflowDriverSession {
       port: this.deps.concurrency,
       runId: this.deps.runId ?? "run",
       live,
+      ...(this.deps.seatGate === undefined
+        ? {}
+        : { seat: { gate: this.deps.seatGate, key: refToString(actor) } }),
       handlers: {
         // 子代理的第一笔工作区写入 ⇒ 引擎关导入缓存。
         onMutating: (instance) => this.sink.askMutating(instance),
@@ -241,6 +261,7 @@ export abstract class AgentRuntimeWorkflowDriverSession {
     state.abortController = new AbortController();
     // 上一个 ask 的 waiting / executing 相位、工具计数都不能带到这个 ask 上；瞬态重驱计数同理。
     state.modelActivity.reset();
+    this.deps.seatGate?.askStarted(refToString(state.actor), instance);
     state.transientAttempts = 0;
     state.cancelRedrive?.();
     state.cancelRedrive = undefined;

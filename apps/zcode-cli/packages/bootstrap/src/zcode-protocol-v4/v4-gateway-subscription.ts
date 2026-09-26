@@ -60,6 +60,7 @@ export class ConversationV4GatewaySubscription extends ConversationV4GatewayInge
       connectionId: params.connectionId,
       base: params.base,
       deliveryProfile: profileName,
+      workflowRunDeltas: params.workflowRunDeltas === true,
     });
     const routeKey = subscriptionRouteKey(
       params.topic,

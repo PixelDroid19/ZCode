@@ -43,6 +43,10 @@ export function shouldMaterializeSubagentProjection(
           return true;
         }
         break;
+      // 这些状态键与 subagent row materialization 无关。
+      case "workflowRun.updated":
+      case "workflowRun.removed":
+        break;
       default: {
         const exhaustiveDelta: never = delta;
         return exhaustiveDelta;
@@ -186,6 +190,8 @@ export function prospectiveSubagentRow(
     switch (delta.op) {
       case "row.appended":
       case "state.updated":
+      case "workflowRun.updated":
+      case "workflowRun.removed":
         break;
       case "row.upserted":
         if (delta.row.rowId === prospective.rowId) prospective = delta.row;

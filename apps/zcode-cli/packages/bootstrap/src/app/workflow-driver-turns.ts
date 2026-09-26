@@ -1,10 +1,4 @@
-import type {
-  SessionId,
-  SubmitResultRequest,
-  SubmitVerdict as ContractsSubmitVerdict,
-  WorkflowEscalatePort,
-  WorkflowSubmitPort,
-} from "@zcode/contracts";
+import type { SessionId, WorkflowEscalatePort, WorkflowSubmitPort } from "@zcode/contracts";
 import type { TurnResult } from "@zcode/core";
 import {
   refToString,
@@ -27,14 +21,14 @@ import {
   withdrawSessionEscalations,
 } from "./workflow-driver-escalation.js";
 import {
-  defer,
   isTurnCancelled,
-  rejectWith,
   reportTurnObservations,
   toWorkflowError,
 } from "./workflow-driver-helpers.js";
 import { countSessionTranscript, journalAskMessageBoundary } from "./workflow-driver-transcript.js";
 import type { SessionState } from "./workflow-driver-types.js";
+import { releaseActorSessions } from "./workflow-driver-quiescence.js";
+import { makeSessionSubmitPort } from "./workflow-driver-submit-bridge.js";
 import { AgentRuntimeWorkflowDriverSession } from "./workflow-driver-session.js";
 
 export class AgentRuntimeWorkflowDriverTurns
@@ -73,38 +67,11 @@ export class AgentRuntimeWorkflowDriverTurns
     if (this.disposed) return;
     this.disposed = true;
     this.stallClock.dispose();
-    for (const state of this.sessions.values()) {
-      state.modelActivity.unsubscribe();
-      state.cancelRedrive?.();
-      state.cancelRedrive = undefined;
-      const close = (): void => this.closeActorRuntime(state);
-      if (state.turn === undefined) close();
-      else state.turn.then(close, close);
-    }
+    releaseActorSessions(this.deps, this.sessions.values(), this.quiescence);
     this.concurrencyUnsubscribe?.();
     this.sessions.clear();
     this.instanceToSession.clear();
     this.qidToSession.clear();
-  }
-
-  protected closeActorRuntime(state: SessionState): void {
-    // Promise.resolve().then(...)：把同步抛出也归到同一条 warn 路径（最小 stub runtime 没有这个方法）。
-    void Promise.resolve()
-      .then(async () => {
-        try {
-          await state.runtime.closeBrowserSession();
-        } finally {
-          await state.runtime.disposeCapabilities?.();
-        }
-      })
-      .catch((error: unknown) => {
-        this.deps.logger?.warn?.("Dynamic workflow actor runtime close failed", {
-          errorMessage: error instanceof Error ? error.message : String(error),
-          event: "dynamic_workflow.actor_runtime.close_failed",
-          module: "bootstrap.app",
-          sessionId: state.sessionId,
-        });
-      });
   }
 
   /**
@@ -231,38 +198,7 @@ export class AgentRuntimeWorkflowDriverTurns
 
   /** 造一个会话级 submit 端口：submit_result handler mid-turn 调用它并阻塞等裁决。 */
   protected makeSubmitPort(sessionId: SessionId): WorkflowSubmitPort {
-    return {
-      respond: (request: SubmitResultRequest): Promise<ContractsSubmitVerdict> => {
-        const state = this.sessions.get(sessionId);
-        const instance = state?.currentInstance;
-        if (state === undefined || instance === undefined) {
-          // 无在飞 ask 却收到 submit：不路由到引擎，直接拒绝（避免悬挂）。
-          return Promise.resolve(rejectWith("no active ask is awaiting a submitted result"));
-        }
-        // Untyped ask 守卫：设计上「全 untyped 的 actor 不注册 submit_result」，
-        // 但 driver 在 createActorSession 时拿不到 actor 的聚合 typed 信息（需 site graph，未透传），故
-        // 一律注册。为不依赖引擎「submitAttempted 对 untyped 早退」的行为（那会让 deferred 永久悬挂），
-        // 这里在 driver 内部直接拦截：untyped ask 收到 submit 时立即回一条合成 rejection 让模型改用纯文本，
-        // 绝不上报 askSubmitAttempted。后续版本可据 actor-graph 投影把 per-actor typed 信息透传进来，
-        // 真正在 untyped-only actor 上跳过注册（关系到 prompt-cache 的 frozen-tools 不变式）。
-        if (!state.currentTyped) {
-          return Promise.resolve(
-            rejectWith(
-              "this ask does not accept submit_result; provide your answer as your final message",
-            ),
-          );
-        }
-        // 单前实例不变式：至多一个挂起 deferred。若已有（不应发生），先拒旧的避免泄漏。
-        state.pendingSubmit?.reject(
-          new WorkflowError("DriverError", "This submit was superseded by a newer submit."),
-        );
-        const deferred = defer<ContractsSubmitVerdict>();
-        state.pendingSubmit = deferred;
-        // 同步上报：引擎在本调用栈内校验并经 respondToSubmit 回裁决（同步解开 deferred）。
-        this.sink.askSubmitAttempted(instance, request.result);
-        return deferred.promise;
-      },
-    };
+    return makeSessionSubmitPort({ sessions: this.sessions, sink: this.sink }, sessionId);
   }
 
   // ——————————————————————————————— 内部：升级问答桥接 ———————————————————————————————

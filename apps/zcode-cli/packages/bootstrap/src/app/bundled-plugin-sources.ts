@@ -177,7 +177,8 @@ export function readSeedFileBytes(
   );
 }
 
-function candidateBaseDirs(): string[] {
+// 内置技能与插件共用同一组入口候选目录，避免打包后的资源布局漂移。
+export function candidateBaseDirs(): string[] {
   // Electron app-server 运行在 resources/glm/zcode.cjs，官方插件资源也随桌面包
   // stage 到同级 packages/*-plugin。候选目录必须优先看入口文件目录，避免生产态退回到
   // monorepo-only 的 __dirname 查找假设。

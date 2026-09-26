@@ -283,9 +283,19 @@ function workflowNotificationDurationMs(snapshot: BackgroundTaskSnapshot): numbe
     "completedAt" in snapshot && snapshot.completedAt instanceof Date
       ? snapshot.completedAt.getTime()
       : undefined;
-  if (startedAt === undefined || completedAt === undefined) return undefined;
-  const durationMs = completedAt - startedAt;
-  return Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : undefined;
+  // 优先使用端口按 lineage 汇总的活动时长，同时保留当前进程可见时长作为下界和兼容回退。
+  const ownLifeMs =
+    startedAt === undefined || completedAt === undefined
+      ? undefined
+      : nonNegativeFinite(completedAt - startedAt);
+  const lineageMs =
+    "activeDurationMs" in snapshot ? nonNegativeFinite(snapshot.activeDurationMs) : undefined;
+  if (ownLifeMs === undefined) return lineageMs;
+  return lineageMs === undefined ? ownLifeMs : Math.max(ownLifeMs, lineageMs);
+}
+
+function nonNegativeFinite(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function workflowSnapshotScriptPath(

@@ -24,6 +24,7 @@ import {
   readProjectPermissionMode,
 } from "./session-store.js";
 import { resolvePluginRuntimeFeatures } from "./plugin-runtime-features.js";
+import { resolveBundledSkillRoots } from "./bundled-skills.js";
 import { resolveAppRuntimeConfig, runtimeConfigLogContext } from "./runtime-config.js";
 import { createWorkspaceHookRuntimeSecurity } from "./workspace-hook-trust.js";
 import {
@@ -100,6 +101,7 @@ export async function createAppResources(input: CreateAppResourcesInput) {
     startupTimer,
     workingDirectory,
   });
+  const bundledSkillRoots = await resolveBundledSkillRoots({ cliStorageRoot, logger });
   const pluginSubagentProfiles = loadPluginAgentProfiles({
     logger,
     plugins: pluginOutcome.plugins,
@@ -308,6 +310,7 @@ export async function createAppResources(input: CreateAppResourcesInput) {
         });
   return {
     artifactStore,
+    bundledSkillRoots,
     cliStorageRoot,
     configuredMcpServers,
     executionPort,

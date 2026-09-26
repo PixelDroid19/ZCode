@@ -56,7 +56,9 @@ export interface Subscription {
   subscriptionId: string;
   connectionId: string;
   profile: DeliveryProfile;
-  /** flush buffer：push 时已过 profile 过滤，flush 时 coalesce 打帧。 */
+  /** Whether the trusted host negotiated workflowRun.* keyed deltas for this connection. */
+  workflowRunDeltas: boolean;
+  /** flush buffer：push 时已过 profile / capability 编码，flush 时 coalesce 打帧。 */
   buffer: ConversationDelta[];
   bufferBytes: number;
   /** buffer 超限后只保留恢复意图，不继续为慢订阅者积压 delta。 */
@@ -73,6 +75,8 @@ export interface ConversationSubscribeParams {
   base?: { logEpoch: string; seq: number };
   /** 缺省 replayable（ws 默认；MessagePort 宿主显式传 continuous）。 */
   deliveryProfile?: DeliveryProfileName;
+  /** Negotiated by the trusted host; absent capability means a legacy consumer. */
+  workflowRunDeltas?: boolean;
 }
 
 export interface ConversationSubscribeResult {

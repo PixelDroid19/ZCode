@@ -15,6 +15,7 @@ export class ConversationV4GatewayLifecycle extends ConversationV4GatewaySession
       );
     }
     clearInterval(this.attachmentPruneTimer);
+    this.indexFanoutThrottle.clear();
     this.attachmentUploads.clear();
     this.binaryReadCache.clear();
     this.binaryReadCacheBytes = 0;

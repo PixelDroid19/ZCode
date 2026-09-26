@@ -1,5 +1,6 @@
 import {
   PermissionCapabilityGroup,
+  isAmendWorkflowOwnedPredecessor,
   type PermissionRuleValue,
   type PermissionRuleset,
 } from "@zcode/contracts";
@@ -87,8 +88,6 @@ export function isOwnedWorkflowAmend(context: PermissionContext, amendToolName: 
   if (context.toolName !== amendToolName || !context.input || typeof context.input !== "object") {
     return false;
   }
-  const predecessor = (context.input as Record<string, unknown>).predecessor;
-  if (!predecessor || typeof predecessor !== "object") return false;
-  const facts = predecessor as Record<string, unknown>;
-  return facts.owned_by_this_session === true && facts.stop_reason !== "user";
+  // 谓词本体住在契约里：权限放行与 handler 的修订回退必须共用同一条 owner 规则。
+  return isAmendWorkflowOwnedPredecessor((context.input as Record<string, unknown>).predecessor);
 }

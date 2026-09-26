@@ -32,6 +32,7 @@ import {
   buildHeadlessTargetCommand,
   commandName,
   DEFAULT_HEADLESS_PROMPT_MODE,
+  ENABLE_WORKFLOW_SCOPE_ERROR,
   FORCE_MCS_SCOPE_ERROR,
   globalOptions,
   isForceMcsSupportedInvocation,
@@ -196,6 +197,15 @@ export const run = async (ctx: RunContext, deps: RunDependencies = {}): Promise<
   if (parsed.values.version === true) {
     ctx.stdout.write(`${version}\n`);
     return 0;
+  }
+
+  if (
+    options.enableWorkflow &&
+    (parsed.positionals.length > 0 ||
+      (typeof parsed.values.prompt !== "string" && targetRequest === undefined))
+  ) {
+    ctx.stderr.write(`${ENABLE_WORKFLOW_SCOPE_ERROR}\n`);
+    return 1;
   }
 
   if (

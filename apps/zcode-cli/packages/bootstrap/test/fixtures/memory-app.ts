@@ -45,6 +45,8 @@ export async function openMemoryApp(input: {
   profile?: string;
   workspaceIdentity?: string;
   subagents?: boolean;
+  dynamicWorkflow?: boolean;
+  skillsEnabled?: boolean;
 }): Promise<MemoryApp> {
   const profileRoot = join(input.root, input.profile ?? "profile");
   const workspace = join(input.root, input.project);
@@ -53,7 +55,12 @@ export async function openMemoryApp(input: {
   await mkdir(profileRoot, { recursive: true });
   await mkdir(join(workspace, ".zcode"), { recursive: true });
   await writeFile(userConfigPath, "{}\n");
-  await writeFile(projectConfigPath, "{}\n");
+  await writeFile(
+    projectConfigPath,
+    JSON.stringify(
+      input.skillsEnabled === undefined ? {} : { skills: { enabled: input.skillsEnabled } },
+    ),
+  );
   const model: Model = {
     providerId: PROVIDER as Model["providerId"],
     modelId: MODEL as Model["modelId"],
@@ -98,7 +105,7 @@ export async function openMemoryApp(input: {
       validateSelection: () => ({ ok: true }),
     } as never,
     runtimeConfig: {
-      dynamicWorkflowEnabled: false,
+      dynamicWorkflowEnabled: input.dynamicWorkflow ?? false,
       mcp: { enabled: false },
       memory: {
         enabled: input.enabled ?? true,

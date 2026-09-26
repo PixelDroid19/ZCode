@@ -22,7 +22,6 @@ import { createInputFacade } from "./input-facade.js";
 import { createSessionFacade } from "./session-facade.js";
 import type { CreateSessionFacadeDeps } from "./session-facade-contract.js";
 import { createWorkflowFacade } from "./workflow-facade.js";
-import { DYNAMIC_WORKFLOW_GATED_COMMAND_NAMES } from "./dynamic-workflow-gate.js";
 import type { DynamicWorkflowRunAppPort } from "./create-app-dynamic-workflow.js";
 import type { NodeReplBrowserBrokerState } from "./create-app-resources.js";
 import type { createAppCapabilitySource } from "./live-capabilities.js";
@@ -111,18 +110,14 @@ export function createAppFacades(input: CreateAppFacadesInput): AppFacades {
     artifactStore,
     customCommandPromptResolver: async (text, resolverOptions) => {
       const builtinPrompt = resolveZCodeBuiltinPromptCommand(text, {
+        // 内置命令与目录使用同一开关，手动输入不能绕过 headless 工作流门禁。
+        dynamicWorkflowEnabled: runtimeConfig.dynamicWorkflowEnabled,
         workingDirectory,
       });
       if (builtinPrompt !== undefined) {
         return builtinPrompt;
       }
       return await resolveZCodeCustomCommandPrompt(text, {
-        // 动态工作流灰度关闭时 `/workflow` 不得展开成插件提示词。目录侧已经
-        // 把它从 `/` 面板剔除，但用户仍可手打命令名，两条路径必须给出同一个结论。
-        // 缺席（TUI、headless、workflow_child）不设门禁，见 runtimeConfig 字段注释。
-        ...(runtimeConfig.dynamicWorkflowEnabled === false
-          ? { disabledCommandNames: DYNAMIC_WORKFLOW_GATED_COMMAND_NAMES }
-          : {}),
         env: options.env,
         executionPort,
         logger,

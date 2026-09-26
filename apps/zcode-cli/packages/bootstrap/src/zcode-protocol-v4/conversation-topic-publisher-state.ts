@@ -1,5 +1,6 @@
 import type {
   CommandEnvelope,
+  ConversationDelta,
   ConversationRowTarget,
   ConversationSnapshot,
   ConversationTopicFrame,
@@ -13,6 +14,8 @@ import type {
 import {
   DELIVERY_PROFILES,
   PROTOCOL_V4_LIMITS,
+  clampWorkflowRunsForLegacy,
+  filterConversationDeltasForProfile,
   filterConversationRowsForProfile,
   utf8JsonByteLength,
 } from "@zcode/shared/zcode-protocol-v4";
@@ -33,6 +36,7 @@ import {
   type LogEntry,
   type Subscription,
 } from "./conversation-topic-publisher-support.js";
+import { encodeConversationDeltasForLegacy } from "./conversation-workflow-run-deltas.js";
 
 export abstract class ConversationTopicPublisherState {
   readonly topic: string;
@@ -155,6 +159,30 @@ export abstract class ConversationTopicPublisherState {
       ...visibleSnapshot,
       rows: { ...visibleSnapshot.rows, window: visibleRows.slice(-limit) },
     };
+  }
+
+  /**
+   * Keep the workflow-run snapshot limit aligned with each subscription's delta dialect.
+   * A legacy client validates the full snapshot schema, so an oversized known key rejects the frame.
+   */
+  protected getWireSnapshotForSubscription(subscription: Subscription): ConversationSnapshot {
+    const snapshot = this.getWireSnapshotForProfile(subscription.profile);
+    if (subscription.workflowRunDeltas || snapshot.workflowRuns === undefined) return snapshot;
+    const workflowRuns = clampWorkflowRunsForLegacy(snapshot.workflowRuns);
+    return workflowRuns === snapshot.workflowRuns ? snapshot : { ...snapshot, workflowRuns };
+  }
+
+  /**
+   * Profile-filter deltas, then collapse keyed workflow deltas for legacy consumers.
+   * Replay uses the current projection so a resumed client gets the final state for that key.
+   */
+  protected encodeDeltasForSubscription(
+    deltas: readonly ConversationDelta[],
+    subscription: Subscription,
+  ): readonly ConversationDelta[] {
+    const filtered = filterConversationDeltasForProfile(deltas, subscription.profile);
+    if (subscription.workflowRunDeltas) return filtered;
+    return encodeConversationDeltasForLegacy(filtered, this.projection.getSnapshot().workflowRuns);
   }
 
   /**

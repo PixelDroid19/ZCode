@@ -11,6 +11,7 @@ import type { HookRunner, SessionId, ToolExecutor, TraceContext } from "../deps.
 import type { AgentRuntimeInternal } from "../internal.js";
 import type { AgentRuntimeDeps } from "../types.js";
 import type { AgentRuntimeConfig } from "../types.js";
+import { sessionHasLoadedSkill } from "../../agent/loaded-skills.js";
 import { resolveRuntimeEmbeddedSearchEnabled } from "../methods/embedded-search-branch.js";
 import { getSessionShellSelectionFromConfig } from "../methods/session-shell-environment.js";
 import { createRuntimeSessionModePort } from "../session-mode-port.js";
@@ -250,6 +251,11 @@ function createRuntimeToolExecutor(
     modelCatalogPort: deps.modelCatalogPort,
     runtimeTaskRegistry: runtime.runtimeTaskRegistry,
     readFileState: runtime.readFileState,
+    // executor 只在启动时构造，skillPort 则可热替换；每次判定都读取当前端口与模型可见历史。
+    // 端口缺席时不设无法满足的门禁；后来启用技能时也不能沿用启动时的放行判定。
+    hasLoadedSkill: (skillName: string) =>
+      runtime.skillPort === undefined ||
+      sessionHasLoadedSkill(runtime.messageHistory.borrowReadOnlyRuntimeEntries(), skillName),
     subagentBackgroundBashMaxMs:
       runtime.config.taskType === "subagent_child"
         ? normalizeSubagentBackgroundBashMaxMs(runtime.config.subagents?.backgroundBashMaxMs)

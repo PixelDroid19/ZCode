@@ -23,6 +23,7 @@ import {
 } from "./official-plugin-seed-lock.js";
 
 import { readSeedFileBytes, resolveSeedSource } from "./bundled-plugin-sources.js";
+export { candidateBaseDirs } from "./bundled-plugin-sources.js";
 
 import {
   cleanupLegacySeedBackup,

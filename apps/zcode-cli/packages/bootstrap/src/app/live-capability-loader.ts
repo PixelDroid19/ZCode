@@ -12,7 +12,7 @@ import { loadLiveTools } from "@zcode/adapters/live-tools";
 import { loadDirectoryMcpServers } from "@zcode/adapters/directory-mcp";
 import { buildPluginReferenceCatalog, computeOfficialCuaServerNames } from "@zcode/core";
 import type { AgentRuntimeConfig } from "@zcode/core";
-import type { Logger, McpServerConfig, PluginLoadOutcome } from "@zcode/contracts";
+import type { Logger, McpServerConfig, PluginLoadOutcome, SkillRoot } from "@zcode/contracts";
 import { resolveZCodePlugins } from "../plugins.js";
 import { collectDisabledPaths } from "../skill-command-overrides.js";
 import { loadPluginAgentProfiles, loadZCodeAgentProfiles } from "../subagents.js";
@@ -33,6 +33,7 @@ export interface LiveCapabilityLoaderOptions {
   options: ZCodeAppOptions;
   initialConfig: ConfigResult;
   initialPlugins: PluginLoadOutcome;
+  bundledSkillRoots?: readonly SkillRoot[];
   initialRuntimeConfig: AgentRuntimeConfig;
   cliStorageRoot: string;
   storageRoot: string;
@@ -161,11 +162,12 @@ export function createLiveCapabilityLoader(input: LiveCapabilityLoaderOptions) {
       const skillOptions = {
         homeDirectory,
         extraRoots: config.config.skills.roots,
-        extraResolvedRoots: plugins.skillRoots,
+        // reload 必须保留随 CLI 分发的技能，不能把它们误当作已卸载插件的资源。
+        extraResolvedRoots: [...plugins.skillRoots, ...(input.bundledSkillRoots ?? [])],
         disabledPaths: [
           ...collectDisabledPaths(config.config.skillOverrides),
           ...(input.initialRuntimeConfig.dynamicWorkflowEnabled === false
-            ? collectDynamicWorkflowDisabledSkillPaths(plugins.skillRoots)
+            ? collectDynamicWorkflowDisabledSkillPaths(input.bundledSkillRoots ?? [])
             : []),
         ],
       };
@@ -334,5 +336,6 @@ function capabilityInputPaths(
     ...plugins.plugins.map((plugin) => plugin.rootPath),
     ...config.config.plugins.dirs,
     ...plugins.skillRoots.map((root) => root.path),
+    ...(input.bundledSkillRoots ?? []).map((root) => root.path),
   ];
 }

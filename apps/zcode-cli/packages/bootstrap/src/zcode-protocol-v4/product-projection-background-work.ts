@@ -5,7 +5,7 @@ import type {
   ConversationDelta,
   WorkflowRunProgressEnvelope,
 } from "@zcode/shared/zcode-protocol-v4";
-import { reduceWorkflowRunsState } from "@zcode/shared/zcode-protocol-v4";
+import { diffWorkflowRunsState, reduceWorkflowRunsState } from "@zcode/shared/zcode-protocol-v4";
 import type { ProductProjectionInternal } from "./product-projection-internal.js";
 
 export function onBackgroundTaskLifecycle(
@@ -110,10 +110,13 @@ export function onDynamicWorkflowRunProgress(
   // 先转 contracts 的有界 payload、再赋给 shared 的结构化入参：这行赋值就是"两边形状不漂移"
   // 的编译期闸（shared 不得反向依赖 contracts，所以入参类型只能结构化定义）。
   const envelope: WorkflowRunProgressEnvelope = event.payload as DynamicWorkflowRunProgressPayload;
-  const workflowRuns = reduceWorkflowRunsState(this.snapshot.workflowRuns, envelope);
+  const prior = this.snapshot.workflowRuns;
+  const workflowRuns = reduceWorkflowRunsState(prior, envelope);
   // null = 语义无变化（无效事件或同一条事件重放）：不产 delta，revision 不抬。
   if (workflowRuns === null) return [];
-  return [{ op: "state.updated", patch: { workflowRuns } }];
+  // 一条引擎事件通常只动一个节点；发状态差避免每次重发整个 workflowRuns 键。
+  // shared reducer 保证应用此 diff 后逐字节得到 workflowRuns。
+  return diffWorkflowRunsState(prior, workflowRuns);
 }
 
 export function removeQueueItems(

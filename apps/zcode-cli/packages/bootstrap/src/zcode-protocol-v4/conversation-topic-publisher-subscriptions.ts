@@ -3,11 +3,7 @@ import type {
   SubscribeAck,
   TopicFrameDeliveryKind,
 } from "@zcode/shared/zcode-protocol-v4";
-import {
-  DELIVERY_PROFILES,
-  coalesceConversationDeltas,
-  filterConversationDeltasForProfile,
-} from "@zcode/shared/zcode-protocol-v4";
+import { DELIVERY_PROFILES, coalesceConversationDeltas } from "@zcode/shared/zcode-protocol-v4";
 import type { TopicFrameReservation } from "./topic-frame-reservation.js";
 import {
   appendConversationSubscriberBuffer,
@@ -41,6 +37,7 @@ export abstract class ConversationTopicPublisherSubscriptions extends Conversati
       subscriptionId: `sub-${this.logEpoch}-${this.nextSubscriptionSerial++}`,
       connectionId: params.connectionId,
       profile,
+      workflowRunDeltas: params.workflowRunDeltas === true,
       buffer: [],
       bufferBytes: 0,
       resyncRequired: false,
@@ -83,7 +80,10 @@ export abstract class ConversationTopicPublisherSubscriptions extends Conversati
           ...this.frameShell(subscription),
           fromSeq: 0,
           toSeq: this.currentSeq,
-          payload: { kind: "snapshot", snapshot: this.getWireSnapshotForProfile(profile) },
+          payload: {
+            kind: "snapshot",
+            snapshot: this.getWireSnapshotForSubscription(subscription),
+          },
         },
         false,
         "initial",
@@ -91,11 +91,11 @@ export abstract class ConversationTopicPublisherSubscriptions extends Conversati
       return this.subscribeResult(this.ackFor(subscription, "snapshot"), reservation, rollback);
     }
 
-    // resume：保留窗内 (base.seq, current] 重放，与在线续流同一条 filter→coalesce 管线。
+    // resume：保留窗内 (base.seq, current] 重放，与在线续流同一条 filter→encode→coalesce 管线。
     const replay = coalesceConversationDeltas(
-      filterConversationDeltasForProfile(
+      this.encodeDeltasForSubscription(
         this.log.flatMap((entry) => (entry.seq > base.seq ? entry.deltas : [])),
-        profile,
+        subscription,
       ),
     );
     if (base.seq === this.currentSeq) {
@@ -165,7 +165,7 @@ export abstract class ConversationTopicPublisherSubscriptions extends Conversati
           toSeq: this.currentSeq,
           payload: {
             kind: "snapshot",
-            snapshot: this.getWireSnapshotForProfile(subscription.profile),
+            snapshot: this.getWireSnapshotForSubscription(subscription),
           },
         },
         true,
@@ -239,7 +239,7 @@ export abstract class ConversationTopicPublisherSubscriptions extends Conversati
           toSeq: this.currentSeq,
           payload: {
             kind: "snapshot",
-            snapshot: this.getWireSnapshotForProfile(subscription.profile),
+            snapshot: this.getWireSnapshotForSubscription(subscription),
           },
         },
         false,
@@ -254,9 +254,9 @@ export abstract class ConversationTopicPublisherSubscriptions extends Conversati
 
     subscription.sentSeq = base.seq;
     const replay = coalesceConversationDeltas(
-      filterConversationDeltasForProfile(
+      this.encodeDeltasForSubscription(
         this.log.flatMap((entry) => (entry.seq > base.seq ? entry.deltas : [])),
-        subscription.profile,
+        subscription,
       ),
     );
     const reservation = this.reserveFrame(

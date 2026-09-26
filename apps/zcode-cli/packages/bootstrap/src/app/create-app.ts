@@ -103,6 +103,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
     memoryStore = appResources.memoryStore;
     const {
       artifactStore,
+      bundledSkillRoots,
       cliStorageRoot,
       configuredMcpServers,
       executionPort,
@@ -237,6 +238,7 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
       options,
       initialConfig: configResult,
       initialPlugins: pluginOutcome,
+      bundledSkillRoots,
       initialRuntimeConfig: runtimeConfig,
       initialMcpPort: mcpPort,
       ownsInitialMcpPort: ownsMcpPort,
@@ -287,13 +289,13 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
           ? (options.skillPort ??
             createNodeSkillAdapter({
               extraRoots: configResult.config.skills.roots,
-              extraResolvedRoots: pluginOutcome.skillRoots,
+              extraResolvedRoots: [...pluginOutcome.skillRoots, ...bundledSkillRoots],
               disabledPaths: [
                 ...collectDisabledPaths(configResult.config.skillOverrides),
                 // 动态工作流灰度关闭时不提供 dynamic-workflows 技能：
                 // 十个工具都不在场，再让模型读到「怎么写工作流脚本」只会诱导它去调不存在的工具。
                 ...(runtimeConfig.dynamicWorkflowEnabled === false
-                  ? collectDynamicWorkflowDisabledSkillPaths(pluginOutcome.skillRoots)
+                  ? collectDynamicWorkflowDisabledSkillPaths(bundledSkillRoots)
                   : []),
               ],
             }))
