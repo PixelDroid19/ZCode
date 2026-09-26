@@ -79,14 +79,6 @@ const BUILTIN_SKILL_DESCRIPTIONS: Record<string, Record<Locale, string>> = {
     "es-ES":
       "Crea, edita y analiza documentos DOCX con revisiones, comentarios, conservación de formato y extracción de texto. Úsala para documentos nuevos, ediciones, manejo de revisiones, comentarios y trabajo profesional con Word.",
   },
-  "dynamic-workflows": {
-    "zh-CN":
-      "编写、调试或重新提交 CreateWorkflow 的 dynamic workflow 脚本时使用：如何设计子代理拓扑、定义结果类型、按文件或 git 扇出、用 world.run 命令做门控检查、用 EvalWorkflowSnippet 预检片段、写 planner-reviewer 循环、用 report() 保住已完成的工作、把产物发布给用户，以及 run 转入后台后该怎么处理。",
-    "en-US":
-      "Use when writing, debugging, or resubmitting a dynamic-workflow script for CreateWorkflow: choosing subagent topology, typing subagent results, fanning out over files or git, gating loops on world.run commands, testing pieces with EvalWorkflowSnippet, planner-reviewer loops, report() salvage, publishing artifacts the user opens, and handling a backgrounded run.",
-    "es-ES":
-      "Úsala al escribir, depurar o reenviar un script de dynamic-workflow para CreateWorkflow: elegir la topología de subagentes, tipar sus resultados, hacer fan-out por archivos o git, gatear bucles con comandos world.run, probar piezas con EvalWorkflowSnippet, bucles planner-reviewer, salvamento con report(), publicar artefactos para el usuario y manejar una ejecución en segundo plano.",
-  },
   "executing-plans": {
     "zh-CN": "已有书面实现计划，并要在带评审检查点的独立会话中执行时使用。",
     "en-US":
